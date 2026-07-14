@@ -1,0 +1,37 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "serverExtension": "ignored",
+  "result": {
+    "rateLimits": {
+      "limitId": "future-compatible",
+      "limitName": "Codex",
+      "primary": {
+        "usedPercent": 7,
+        "windowDurationMins": 300,
+        "resetsAt": 1900003600,
+        "futureWindowField": {
+          "enabled": true
+        }
+      },
+      "secondary": null,
+      "credits": {
+        "hasCredits": false,
+        "unlimited": false,
+        "balance": null,
+        "currency": "USD"
+      },
+      "individualLimit": null,
+      "planType": "plus",
+      "rateLimitReachedType": null,
+      "futureSnapshotField": [
+        "one",
+        "two"
+      ]
+    },
+    "rateLimitsByLimitId": null,
+    "futureResultField": {
+      "version": 2
+    }
+  }
+}

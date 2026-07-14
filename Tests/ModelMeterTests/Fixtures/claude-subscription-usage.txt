@@ -1,0 +1,8 @@
+You are currently using your subscription to power your Claude Code usage
+Current session: 37% used · resets 2pm (local time)
+Current week (all models): 63% used - resets Monday at 12am
+Current week (Sonnet only): 14% used
+Current week (Opus only): 9.5% used • resets Friday at 6pm
+
+What's contributing to your limits usage?
+Approximate, based on local sessions on this machine — does not include other devices or claude.ai.

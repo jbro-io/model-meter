@@ -1,0 +1,79 @@
+{
+  "id": 2,
+  "result": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": "Codex",
+      "primary": {
+        "usedPercent": 42,
+        "windowDurationMins": 300,
+        "resetsAt": 1900003600
+      },
+      "secondary": {
+        "usedPercent": 71,
+        "windowDurationMins": 10080,
+        "resetsAt": 1900604800
+      },
+      "credits": {
+        "hasCredits": true,
+        "unlimited": false,
+        "balance": "17.50"
+      },
+      "individualLimit": {
+        "limit": "50.00",
+        "used": "12.50",
+        "remainingPercent": 75,
+        "resetsAt": 1901318400
+      },
+      "planType": "plus",
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "limitName": "Codex",
+        "primary": {
+          "usedPercent": 42,
+          "windowDurationMins": 300,
+          "resetsAt": 1900003600
+        },
+        "secondary": {
+          "usedPercent": 71,
+          "windowDurationMins": 10080,
+          "resetsAt": 1900604800
+        },
+        "credits": {
+          "hasCredits": true,
+          "unlimited": false,
+          "balance": "17.50"
+        },
+        "individualLimit": {
+          "limit": "50.00",
+          "used": "12.50",
+          "remainingPercent": 75,
+          "resetsAt": 1901318400
+        },
+        "planType": "plus",
+        "rateLimitReachedType": null
+      },
+      "codex-mini": {
+        "limitId": "codex-mini",
+        "limitName": "Codex Mini",
+        "primary": {
+          "usedPercent": 18,
+          "windowDurationMins": 300,
+          "resetsAt": 1900007200
+        },
+        "secondary": null,
+        "credits": {
+          "hasCredits": true,
+          "unlimited": true,
+          "balance": null
+        },
+        "individualLimit": null,
+        "planType": "plus",
+        "rateLimitReachedType": null
+      }
+    }
+  }
+}

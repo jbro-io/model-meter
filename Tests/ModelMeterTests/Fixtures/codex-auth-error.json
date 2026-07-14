@@ -1,0 +1,10 @@
+{
+  "id": 2,
+  "error": {
+    "code": -32000,
+    "message": "Authentication required. Please sign in to Codex.",
+    "data": {
+      "reason": "redacted"
+    }
+  }
+}
