@@ -103,6 +103,19 @@ struct CodexInitializeResult: Decodable, Equatable {
 struct CodexRateLimitsResult: Decodable, Equatable {
     let rateLimits: CodexRateLimitSnapshot
     let rateLimitsByLimitId: [String: CodexRateLimitSnapshot]?
+    let rateLimitResetCredits: CodexRateLimitResetCredits?
+}
+
+struct CodexRateLimitResetCredits: Decodable, Equatable {
+    let availableCount: Int
+    let credits: [CodexRateLimitResetCredit]
+}
+
+struct CodexRateLimitResetCredit: Decodable, Equatable {
+    let id: String
+    let status: String
+    let expiresAt: Int64?
+    let title: String?
 }
 
 struct CodexRateLimitSnapshot: Decodable, Equatable {

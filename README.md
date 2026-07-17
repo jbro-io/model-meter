@@ -7,6 +7,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Claude subscription quota windows from the built-in `/usage` command
 - Claude interactive and background session count from `claude agents --json`
 - Codex rolling and weekly quota windows, including model-specific buckets
+- Available Codex usage-limit reset credits and their expiry dates
 - Codex tokens used today, lifetime tokens, plan, and streak
 - Exact and relative reset times for quota windows when the CLI reports enough timing data
 - Independent stale/error states, so one provider can fail without hiding the other
@@ -71,6 +72,8 @@ Model Meter starts `codex app-server --stdio`, performs the required initialize 
 - `account/usage/read`
 
 The app-server returns account-wide data, so concurrent Codex sessions are reflected without parsing individual conversation transcripts. This is the rich-client interface shipped with the CLI; the generated protocol is versioned, and the parser deliberately ignores unknown fields for forward compatibility.
+
+When Codex reports a granted usage-limit reset, Model Meter shows its availability and expiry date. It is display-only; Model Meter never consumes a reset.
 
 Codex account usage requires ChatGPT authentication. Platform API-key spend is not exposed by these Codex CLI methods.
 

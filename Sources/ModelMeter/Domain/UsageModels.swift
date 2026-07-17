@@ -60,15 +60,49 @@ struct UsageActivity: Equatable, Sendable {
     static let empty = UsageActivity()
 }
 
+struct UsageResetCredit: Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let expiresAt: Date?
+}
+
+struct UsageResetCredits: Equatable, Sendable {
+    let availableCount: Int
+    let credits: [UsageResetCredit]
+}
+
 struct ProviderUsageSnapshot: Equatable, Sendable {
     let provider: ProviderID
     let fetchedAt: Date
     let plan: String?
     let limits: [UsageLimit]
+    let resetCredits: UsageResetCredits?
     let activity: UsageActivity
     let cliVersion: String?
     let source: String
     let note: String?
+
+    init(
+        provider: ProviderID,
+        fetchedAt: Date,
+        plan: String?,
+        limits: [UsageLimit],
+        resetCredits: UsageResetCredits? = nil,
+        activity: UsageActivity,
+        cliVersion: String?,
+        source: String,
+        note: String?
+    ) {
+        self.provider = provider
+        self.fetchedAt = fetchedAt
+        self.plan = plan
+        self.limits = limits
+        self.resetCredits = resetCredits
+        self.activity = activity
+        self.cliVersion = cliVersion
+        self.source = source
+        self.note = note
+    }
 
     var highestUsedFraction: Double? {
         limits.map(\.usedFraction).max()

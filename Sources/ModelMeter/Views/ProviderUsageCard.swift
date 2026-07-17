@@ -142,6 +142,11 @@ struct ProviderUsageCard: View {
                 }
             }
 
+            if provider == .codex, let resetCredits = snapshot.resetCredits {
+                Divider()
+                resetCreditsSection(resetCredits, now: now)
+            }
+
             let metrics = activityMetrics(snapshot.activity)
             if !metrics.isEmpty {
                 Divider()
@@ -215,6 +220,40 @@ struct ProviderUsageCard: View {
         }
     }
 
+    private func resetCreditsSection(_ resetCredits: UsageResetCredits, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Usage limit resets")
+                    .font(.callout.weight(.semibold))
+
+                Spacer(minLength: 8)
+
+                Text("\(resetCredits.availableCount) available")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.green.opacity(0.14), in: Capsule())
+            }
+
+            ForEach(resetCredits.credits) { credit in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(credit.title)
+                        .font(.callout.weight(.medium))
+
+                    if let expiresAt = credit.expiresAt {
+                        Text(expiryDetails(for: expiresAt, now: now))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Usage limit resets")
+        .accessibilityValue("\(resetCredits.availableCount) available")
+    }
+
     private func footer(_ snapshot: ProviderUsageSnapshot, now: Date) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Image(systemName: isStale(snapshot, at: now) ? "clock.badge.exclamationmark" : "clock")
@@ -280,6 +319,12 @@ struct ProviderUsageCard: View {
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func expiryDetails(for date: Date, now: Date) -> String {
+        let exact = date.formatted(date: .abbreviated, time: .omitted)
+        let relative = RelativeDateTimeFormatter().localizedString(for: date, relativeTo: now)
+        return "Expires \(exact) · \(relative)"
     }
 
     private func sourceDescription(_ snapshot: ProviderUsageSnapshot) -> String {
