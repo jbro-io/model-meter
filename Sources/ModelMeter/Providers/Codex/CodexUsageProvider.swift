@@ -64,6 +64,7 @@ struct CodexUsageProvider: UsageProviding, Sendable {
             fetchedAt: fetchedAt,
             plan: planLabel(from: rateLimits),
             limits: limits,
+            resetCredits: makeResetCredits(from: rateLimits.rateLimitResetCredits),
             activity: UsageActivity(
                 todayTokens: todayTokens,
                 lifetimeTokens: usage?.summary.lifetimeTokens,
@@ -132,6 +133,34 @@ struct CodexUsageProvider: UsageProviding, Sendable {
             }
             return limits
         }
+    }
+
+    private func makeResetCredits(
+        from response: CodexRateLimitResetCredits?
+    ) -> UsageResetCredits? {
+        guard let response else { return nil }
+
+        let credits = response.credits.compactMap { credit -> UsageResetCredit? in
+            guard credit.status.caseInsensitiveCompare("available") == .orderedSame else {
+                return nil
+            }
+            let title = credit.title?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let displayTitle = title.flatMap { $0.isEmpty ? nil : $0 } ?? "Usage reset"
+            return UsageResetCredit(
+                id: credit.id,
+                title: displayTitle,
+                expiresAt: credit.expiresAt.map {
+                    Date(timeIntervalSince1970: TimeInterval($0))
+                }
+            )
+        }
+
+        guard response.availableCount > 0 || !credits.isEmpty else { return nil }
+        return UsageResetCredits(
+            availableCount: max(response.availableCount, credits.count),
+            credits: credits
+        )
     }
 
     private func makeLimit(

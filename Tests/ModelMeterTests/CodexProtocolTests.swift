@@ -72,6 +72,14 @@ final class CodexProtocolTests: XCTestCase {
         XCTAssertEqual(individualLimit.remainingPercent, 75)
         XCTAssertEqual(individualLimit.resetsAt, 1_901_318_400)
 
+        let resetCredits = try XCTUnwrap(result.rateLimitResetCredits)
+        XCTAssertEqual(resetCredits.availableCount, 1)
+        let resetCredit = try XCTUnwrap(resetCredits.credits.first)
+        XCTAssertEqual(resetCredit.id, "test-reset-credit")
+        XCTAssertEqual(resetCredit.status, "available")
+        XCTAssertEqual(resetCredit.expiresAt, 1_901_318_400)
+        XCTAssertEqual(resetCredit.title, "Full reset")
+
         let buckets = try XCTUnwrap(result.rateLimitsByLimitId)
         XCTAssertEqual(Set(buckets.keys), ["codex", "codex-mini"])
         XCTAssertEqual(buckets["codex"]?.primary?.usedPercent, 42)
