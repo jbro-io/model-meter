@@ -8,7 +8,8 @@ final class SettingsWindowController: NSWindowController {
     init(
         settings: AppSettings,
         store: UsageStore,
-        alertController: UsageAlertController
+        alertController: UsageAlertController,
+        autoContinueController: AutoContinueController
     ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
@@ -29,7 +30,8 @@ final class SettingsWindowController: NSWindowController {
             rootView: SettingsView(
                 settings: settings,
                 store: store,
-                alertController: alertController
+                alertController: alertController,
+                autoContinueController: autoContinueController
             )
         )
 

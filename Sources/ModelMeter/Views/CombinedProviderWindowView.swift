@@ -45,6 +45,7 @@ struct CombinedProviderWindowView: View {
             ResponsiveProviderCards(
                 store: store,
                 settings: settings,
+                expandedActivity: true,
                 openProviderWindow: openProviderWindow
             )
                 .frame(maxWidth: .infinity, alignment: .top)

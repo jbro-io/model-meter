@@ -12,7 +12,9 @@ final class UsageStore: ObservableObject {
     private let settings: AppSettings
     private var refreshTask: Task<Void, Never>?
     private var pollingTask: Task<Void, Never>?
-    var successfulSnapshotHandler: (@MainActor (ProviderUsageSnapshot) -> Void)?
+    private var successfulSnapshotHandlers: [
+        UUID: @MainActor (ProviderUsageSnapshot) -> Void
+    ] = [:]
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -20,6 +22,19 @@ final class UsageStore: ObservableObject {
 
     var isRefreshing: Bool {
         states.values.contains(where: \.isLoading)
+    }
+
+    @discardableResult
+    func addSuccessfulSnapshotHandler(
+        _ handler: @escaping @MainActor (ProviderUsageSnapshot) -> Void
+    ) -> UUID {
+        let id = UUID()
+        successfulSnapshotHandlers[id] = handler
+        return id
+    }
+
+    func removeSuccessfulSnapshotHandler(_ id: UUID) {
+        successfulSnapshotHandlers.removeValue(forKey: id)
     }
 
     func start() {
@@ -88,7 +103,9 @@ final class UsageStore: ObservableObject {
                     switch outcome {
                     case .success(let provider, let snapshot):
                         self.states[provider] = .loaded(snapshot)
-                        self.successfulSnapshotHandler?(snapshot)
+                        for handler in self.successfulSnapshotHandlers.values {
+                            handler(snapshot)
+                        }
                     case .failure(let provider, let message):
                         self.states[provider] = .failed(
                             message: message,

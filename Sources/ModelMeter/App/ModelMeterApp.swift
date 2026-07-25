@@ -9,6 +9,7 @@ private final class AppServices {
     let settings: AppSettings
     let store: UsageStore
     let alertController: UsageAlertController
+    let autoContinueController: AutoContinueController
 
     private init() {
         let settings = AppSettings()
@@ -16,6 +17,7 @@ private final class AppServices {
         let store = UsageStore(settings: settings)
         self.store = store
         alertController = UsageAlertController(settings: settings, store: store)
+        autoContinueController = AutoContinueController(settings: settings, store: store)
     }
 }
 
@@ -30,7 +32,8 @@ struct ModelMeterApp: App {
             SettingsView(
                 settings: services.settings,
                 store: services.store,
-                alertController: services.alertController
+                alertController: services.alertController,
+                autoContinueController: services.autoContinueController
             )
         }
     }
@@ -61,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         services.alertController.activate()
+        services.autoContinueController.activate()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -75,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         services.store.stop()
         services.alertController.deactivate()
+        services.autoContinueController.deactivate()
         ProcessInfo.processInfo.enableAutomaticTermination("Model Meter menu-bar utility")
     }
 
@@ -126,7 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = SettingsWindowController(
                 settings: services.settings,
                 store: services.store,
-                alertController: services.alertController
+                alertController: services.alertController,
+                autoContinueController: services.autoContinueController
             )
         }
         settingsWindowController?.present()

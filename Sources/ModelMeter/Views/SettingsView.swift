@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: UsageStore
     @ObservedObject var alertController: UsageAlertController
+    @ObservedObject var autoContinueController: AutoContinueController
     @State private var soundImportError: String?
 
     var body: some View {
@@ -61,6 +62,11 @@ struct SettingsView: View {
                     .controlSize(.small)
                     .disabled(store.isRefreshing)
                 }
+
+                AutoContinueSettingsSection(
+                    settings: settings,
+                    controller: autoContinueController
+                )
 
                 Section("Usage alerts") {
                     Toggle(
@@ -226,6 +232,12 @@ struct SettingsView: View {
         .frame(minWidth: 620, minHeight: 420)
         .onAppear {
             alertController.refreshAuthorizationState()
+            if settings.autoContinueEnabled {
+                for provider in ProviderID.allCases
+                where settings.autoContinueEnabled(for: provider) {
+                    autoContinueController.scanTargets(for: provider)
+                }
+            }
         }
         .onReceive(
             NotificationCenter.default.publisher(

@@ -56,8 +56,18 @@ struct UsageActivity: Equatable, Sendable {
     var sessionCostUSD: Double?
     var activeSessions: Int?
     var currentStreakDays: Int?
+    var totalSessions: Int?
+    var totalMessages: Int?
+    var dailyTokens: [UsageActivityDay] = []
 
     static let empty = UsageActivity()
+}
+
+struct UsageActivityDay: Identifiable, Equatable, Sendable {
+    let date: Date
+    let tokens: Int64
+
+    var id: Date { date }
 }
 
 struct UsageResetCredit: Identifiable, Equatable, Sendable {

@@ -15,6 +15,7 @@ final class UsageAlertController: ObservableObject {
     private let notifier: any UsageNotificationDelivering
     private let defaults: UserDefaults
     private var engine: UsageThresholdEngine
+    private var snapshotHandlerID: UUID?
 
     init(
         settings: AppSettings,
@@ -36,14 +37,17 @@ final class UsageAlertController: ObservableObject {
 
     func activate() {
         notifier.activate()
-        store?.successfulSnapshotHandler = { [weak self] snapshot in
+        snapshotHandlerID = store?.addSuccessfulSnapshotHandler { [weak self] snapshot in
             self?.processSuccessfulSnapshot(snapshot)
         }
         refreshAuthorizationState()
     }
 
     func deactivate() {
-        store?.successfulSnapshotHandler = nil
+        if let snapshotHandlerID {
+            store?.removeSuccessfulSnapshotHandler(snapshotHandlerID)
+            self.snapshotHandlerID = nil
+        }
     }
 
     func setAlertsEnabled(_ enabled: Bool) {

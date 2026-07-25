@@ -3,6 +3,7 @@ import SwiftUI
 struct ResponsiveProviderCards: View {
     @ObservedObject var store: UsageStore
     @ObservedObject var settings: AppSettings
+    var expandedActivity = false
     var openProviderWindow: (@MainActor (ProviderID) -> Void)? = nil
 
     var body: some View {
@@ -44,6 +45,7 @@ struct ResponsiveProviderCards: View {
                 provider: provider,
                 state: store.states[provider] ?? .idle,
                 displayMode: settings.usageDisplayMode,
+                activityStyle: expandedActivity ? .expanded : .compact,
                 openWindow: {
                     openProviderWindow(provider)
                 }
@@ -52,7 +54,8 @@ struct ResponsiveProviderCards: View {
             ProviderUsageCard(
                 provider: provider,
                 state: store.states[provider] ?? .idle,
-                displayMode: settings.usageDisplayMode
+                displayMode: settings.usageDisplayMode,
+                activityStyle: expandedActivity ? .expanded : .compact
             )
         }
     }

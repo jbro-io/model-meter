@@ -1,9 +1,15 @@
 import SwiftUI
 
+enum ProviderCardActivityStyle: Sendable {
+    case compact
+    case expanded
+}
+
 struct ProviderUsageCard: View {
     let provider: ProviderID
     let state: ProviderLoadState
     let displayMode: UsageDisplayMode
+    var activityStyle: ProviderCardActivityStyle = .compact
     var openWindow: (@MainActor () -> Void)? = nil
 
     private let staleInterval: TimeInterval = 10 * 60
@@ -148,24 +154,45 @@ struct ProviderUsageCard: View {
             }
 
             let metrics = activityMetrics(snapshot.activity)
-            if !metrics.isEmpty {
+            if !metrics.isEmpty || !snapshot.activity.dailyTokens.isEmpty {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Activity")
-                        .font(.callout.weight(.semibold))
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Activity")
+                            .font(.callout.weight(.semibold))
 
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 8, alignment: .leading),
-                            GridItem(.flexible(), spacing: 8, alignment: .leading),
-                            GridItem(.flexible(), spacing: 8, alignment: .leading)
-                        ],
-                        alignment: .leading,
-                        spacing: 8
-                    ) {
-                        ForEach(metrics) { metric in
-                            ActivityMetricView(metric: metric, tint: provider.tint)
+                        Spacer()
+
+                        if activityStyle == .expanded,
+                           !snapshot.activity.dailyTokens.isEmpty {
+                            Text("7-day pulse")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if activityStyle == .expanded,
+                       !snapshot.activity.dailyTokens.isEmpty {
+                        WeeklyTokenPulseView(
+                            days: snapshot.activity.dailyTokens,
+                            tint: provider.tint
+                        )
+                    }
+
+                    if !metrics.isEmpty {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 8, alignment: .leading),
+                                GridItem(.flexible(), spacing: 8, alignment: .leading),
+                                GridItem(.flexible(), spacing: 8, alignment: .leading)
+                            ],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(metrics) { metric in
+                                ActivityMetricView(metric: metric, tint: provider.tint)
+                            }
                         }
                     }
                 }
@@ -383,6 +410,24 @@ struct ProviderUsageCard: View {
             ))
         }
 
+        if let sessions = activity.totalSessions {
+            metrics.append(ActivityMetric(
+                id: "totalSessions",
+                systemImage: "tray.full",
+                title: "Total sessions",
+                value: sessions.formatted(.number.notation(.compactName))
+            ))
+        }
+
+        if let messages = activity.totalMessages {
+            metrics.append(ActivityMetric(
+                id: "totalMessages",
+                systemImage: "bubble.left.and.bubble.right",
+                title: "Messages",
+                value: messages.formatted(.number.notation(.compactName))
+            ))
+        }
+
         return metrics
     }
 
@@ -515,6 +560,100 @@ private struct ActivityMetricView: View {
             .primary.opacity(0.035),
             in: RoundedRectangle(cornerRadius: 7, style: .continuous)
         )
+    }
+}
+
+private struct WeeklyTokenPulseView: View {
+    let days: [UsageActivityDay]
+    let tint: Color
+
+    private var maximum: Double {
+        Double(max(days.map(\.tokens).max() ?? 0, 1))
+    }
+
+    private var total: Int64 {
+        days.reduce(Int64(0)) { $0 + $1.tokens }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            GeometryReader { geometry in
+                HStack(alignment: .bottom, spacing: 7) {
+                    ForEach(days) { day in
+                        let fraction = Double(day.tokens) / maximum
+                        VStack(spacing: 5) {
+                            Spacer(minLength: 0)
+
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            tint.opacity(day.tokens == 0 ? 0.12 : 0.38),
+                                            tint.opacity(day.tokens == 0 ? 0.22 : 0.95)
+                                        ],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .frame(
+                                    height: max(
+                                        4,
+                                        (geometry.size.height - 19) * max(fraction, 0.025)
+                                    )
+                                )
+                                .overlay(alignment: .top) {
+                                    if Calendar.current.isDateInToday(day.date) {
+                                        Capsule()
+                                            .fill(.white.opacity(0.85))
+                                            .frame(width: 9, height: 2)
+                                            .padding(.top, 3)
+                                    }
+                                }
+                                .help(
+                                    "\(day.date.formatted(date: .abbreviated, time: .omitted)): \(day.tokens.formatted(.number.notation(.compactName))) tokens"
+                                )
+
+                            Text(day.date.formatted(.dateTime.weekday(.narrow)))
+                                .font(.system(size: 9, weight: .medium, design: .rounded))
+                                .foregroundStyle(
+                                    Calendar.current.isDateInToday(day.date)
+                                        ? tint
+                                        : .secondary
+                                )
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .frame(height: 76)
+
+            HStack {
+                Label("Tokens by day", systemImage: "waveform.path.ecg")
+                Spacer()
+                Text("\(total.formatted(.number.notation(.compactName))) this week")
+                    .monospacedDigit()
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 11)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(
+            LinearGradient(
+                colors: [tint.opacity(0.09), tint.opacity(0.025)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(tint.opacity(0.13), lineWidth: 0.5)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Token usage over the last seven days")
+        .accessibilityValue("\(total) tokens this week")
     }
 }
 

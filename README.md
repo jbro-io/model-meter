@@ -5,7 +5,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 ## What it shows
 
 - Claude subscription quota windows from the built-in `/usage` command
-- Claude interactive and background session count from `claude agents --json`
+- Claude token activity, streak, lifetime sessions/messages, and interactive/background session count
 - Codex rolling and weekly quota windows, including model-specific buckets
 - Available Codex usage-limit reset credits and their expiry dates
 - Codex tokens used today, lifetime tokens, plan, and streak
@@ -15,6 +15,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Floating glass dashboards in either combined mode or independent Claude and Codex windows
 - Native Liquid Glass cards and controls on macOS 26, with a material fallback on earlier supported releases
 - Configurable native macOS alerts at one or more remaining-quota thresholds, with optional sound
+- Session-aware Auto-Continue for Kitty: resume selected Claude or Codex tabs when an exhausted 5-hour window recovers
 - Automatic refresh (1–30 minutes), manual refresh, and configurable CLI paths
 
 The menu-bar item identifies the provider and quota window currently under the most pressure, using the selected Used or Remaining mode.
@@ -62,6 +63,8 @@ claude --print --output-format json --no-session-persistence --safe-mode /usage
 
 It also runs `claude auth status --json` and `claude agents --json`. Safe mode avoids loading project hooks and plugins while retaining the CLI's own authentication. Model Meter does not extract OAuth tokens or call Anthropic's private usage endpoint itself.
 
+For the Activity panel, Model Meter reads Claude Code's aggregate `~/.claude/stats-cache.json`. Detached provider windows render a compact seven-day token pulse graph; constrained popover cards keep the smaller stat grid.
+
 Claude API-key, Bedrock, Vertex, and Foundry authentication do not expose subscription quota bars through `/usage`. In that case Model Meter still reports concurrent sessions and clearly points API spend reporting to Claude Console.
 
 ### Codex
@@ -77,11 +80,28 @@ When Codex reports a granted usage-limit reset, Model Meter shows its availabili
 
 Codex account usage requires ChatGPT authentication. Platform API-key spend is not exposed by these Codex CLI methods.
 
+### Auto-Continue
+
+Auto-Continue can type `continue` and press Return in enrolled Kitty sessions after Model Meter observes that provider's 5-hour window reach 100% and later become available again. It is off by default.
+
+Enable Kitty's local-socket remote control by adding this to `kitty.conf`, then restart Kitty:
+
+```conf
+allow_remote_control socket-only
+listen_on unix:/tmp/model-meter-kitty
+```
+
+Open Model Meter Settings, enable Auto-Continue, and use **Scan** on the Claude or Codex card. Kitty tab titles are cleaned up and shown in the session list. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its command line.
+
+Model Meter verifies saved window IDs against live provider-matching Kitty windows before sending. It sends once per observed exhaustion/recovery cycle, persists an armed recovery across relaunches, wakes near the provider's reported reset time, and leaves a continuation armed if no enrolled session is available.
+
 ## Privacy and sandboxing
 
 Model Meter never reads or logs provider credentials. It passes requests to the installed CLIs and parses only their usage responses. App Sandbox is intentionally not enabled because sandboxing would prevent the child CLIs from using their existing config/keychain access and would block Claude's cross-process session discovery.
 
-Claude's fallback session-registry check reads only status timestamps and never opens transcript content. Codex conversation logs are not read at all.
+Claude's fallback session-registry check reads only status timestamps. Its stats integration reads only Claude Code's aggregate stats cache. Model Meter never opens Claude or Codex transcript content.
+
+Auto-Continue uses Kitty's configured local Unix socket. It does not use Accessibility permissions, scrape terminal contents, or activate a terminal window.
 
 ## Project layout
 

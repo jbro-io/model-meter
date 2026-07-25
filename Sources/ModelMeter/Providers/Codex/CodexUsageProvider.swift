@@ -70,7 +70,11 @@ struct CodexUsageProvider: UsageProviding, Sendable {
                 lifetimeTokens: usage?.summary.lifetimeTokens,
                 sessionCostUSD: nil,
                 activeSessions: nil,
-                currentStreakDays: usage?.summary.currentStreakDays
+                currentStreakDays: usage?.summary.currentStreakDays,
+                dailyTokens: Self.sevenDayHistory(
+                    buckets: usage?.dailyUsageBuckets ?? [],
+                    endingAt: fetchedAt
+                )
             ),
             cliVersion: initialize?.userAgent.flatMap(Self.version(from:)),
             source: "Codex app-server",
@@ -234,6 +238,27 @@ struct CodexUsageProvider: UsageProviding, Sendable {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    private static func sevenDayHistory(
+        buckets: [CodexDailyUsageBucket],
+        endingAt date: Date
+    ) -> [UsageActivityDay] {
+        let tokensByDay = Dictionary(
+            buckets.map { ($0.startDate, max($0.tokens, 0)) },
+            uniquingKeysWith: +
+        )
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let today = calendar.startOfDay(for: date)
+        return (-6...0).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today)
+            else { return nil }
+            return UsageActivityDay(
+                date: day,
+                tokens: tokensByDay[dayString(for: day)] ?? 0
+            )
+        }
     }
 
     private static func version(from userAgent: String) -> String? {

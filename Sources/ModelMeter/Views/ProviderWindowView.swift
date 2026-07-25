@@ -45,7 +45,8 @@ struct ProviderWindowView: View {
             ProviderUsageCard(
                 provider: provider,
                 state: store.states[provider] ?? .idle,
-                displayMode: settings.usageDisplayMode
+                displayMode: settings.usageDisplayMode,
+                activityStyle: .expanded
             )
             .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, 14)

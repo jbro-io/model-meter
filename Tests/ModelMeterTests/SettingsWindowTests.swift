@@ -19,10 +19,16 @@ final class SettingsWindowTests: XCTestCase {
             notifier: TestNotificationClient(),
             defaults: defaults
         )
+        let autoContinueController = AutoContinueController(
+            settings: settings,
+            store: store,
+            defaults: defaults
+        )
         let controller = SettingsWindowController(
             settings: settings,
             store: store,
-            alertController: alertController
+            alertController: alertController,
+            autoContinueController: autoContinueController
         )
         let window = try XCTUnwrap(controller.window)
 
@@ -44,6 +50,9 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertTrue(hostingController.rootView.settings === settings)
         XCTAssertTrue(hostingController.rootView.store === store)
         XCTAssertTrue(hostingController.rootView.alertController === alertController)
+        XCTAssertTrue(
+            hostingController.rootView.autoContinueController === autoContinueController
+        )
 
         let originalWindow = window
         controller.close()

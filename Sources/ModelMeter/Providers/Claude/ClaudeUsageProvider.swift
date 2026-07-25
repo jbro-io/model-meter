@@ -88,8 +88,10 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
 
         let agentsOutput = try? await agentsCommand
         let cliSessionCount = agentsOutput.flatMap(activeSessionCount) ?? 0
-        let registryCount = ClaudeSessionRegistry().recentSessionCount(now: now())
+        let fetchedAt = now()
+        let registryCount = ClaudeSessionRegistry().recentSessionCount(now: fetchedAt)
         let activeSessions = max(cliSessionCount, registryCount)
+        let stats = ClaudeStatsCacheStore().load(now: fetchedAt)
 
         let versionOutput = try? await versionCommand
         let version = versionOutput?.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -97,15 +99,18 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
 
         return ProviderUsageSnapshot(
             provider: .claude,
-            fetchedAt: now(),
+            fetchedAt: fetchedAt,
             plan: auth.planLabel,
             limits: parsed.limits,
             activity: UsageActivity(
-                todayTokens: nil,
-                lifetimeTokens: nil,
+                todayTokens: stats?.todayTokens,
+                lifetimeTokens: stats?.lifetimeTokens,
                 sessionCostUSD: parsed.sessionCostUSD.flatMap { $0 > 0 ? $0 : nil },
                 activeSessions: activeSessions,
-                currentStreakDays: nil
+                currentStreakDays: stats?.currentStreakDays,
+                totalSessions: stats?.totalSessions,
+                totalMessages: stats?.totalMessages,
+                dailyTokens: stats?.dailyTokens ?? []
             ),
             cliVersion: version,
             source: "Claude CLI /usage",

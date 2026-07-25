@@ -79,6 +79,18 @@ enum UsageAlertSound: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum AutoContinueTerminal: String, CaseIterable, Identifiable, Sendable {
+    case kitty
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .kitty: "Kitty"
+        }
+    }
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Key {
@@ -91,6 +103,18 @@ final class AppSettings: ObservableObject {
         static let usageAlertSound = "usageAlertSound"
         static let usageAlertSoundsByThreshold = "usageAlertSoundsByThreshold"
         static let customAlertSounds = "customAlertSounds"
+        static let autoContinueEnabled = "autoContinueEnabled"
+        static let autoContinueClaudeEnabled = "autoContinueClaudeEnabled"
+        static let autoContinueCodexEnabled = "autoContinueCodexEnabled"
+        static let autoContinueTerminal = "autoContinueTerminal"
+        static let kittyExecutablePath = "kittyExecutablePath"
+        static let kittyListenAddress = "kittyListenAddress"
+        static let kittyClaudeMatch = "kittyClaudeMatch"
+        static let kittyCodexMatch = "kittyCodexMatch"
+        static let kittyClaudeAllSessions = "kittyClaudeAllSessions"
+        static let kittyCodexAllSessions = "kittyCodexAllSessions"
+        static let kittyClaudeSessionIDs = "kittyClaudeSessionIDs"
+        static let kittyCodexSessionIDs = "kittyCodexSessionIDs"
     }
 
     private let defaults: UserDefaults
@@ -145,6 +169,68 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var autoContinueEnabled: Bool {
+        didSet { defaults.set(autoContinueEnabled, forKey: Key.autoContinueEnabled) }
+    }
+
+    @Published var autoContinueClaudeEnabled: Bool {
+        didSet {
+            defaults.set(autoContinueClaudeEnabled, forKey: Key.autoContinueClaudeEnabled)
+        }
+    }
+
+    @Published var autoContinueCodexEnabled: Bool {
+        didSet {
+            defaults.set(autoContinueCodexEnabled, forKey: Key.autoContinueCodexEnabled)
+        }
+    }
+
+    @Published var autoContinueTerminal: AutoContinueTerminal {
+        didSet {
+            defaults.set(autoContinueTerminal.rawValue, forKey: Key.autoContinueTerminal)
+        }
+    }
+
+    @Published var kittyExecutablePath: String {
+        didSet { defaults.set(kittyExecutablePath, forKey: Key.kittyExecutablePath) }
+    }
+
+    @Published var kittyListenAddress: String {
+        didSet { defaults.set(kittyListenAddress, forKey: Key.kittyListenAddress) }
+    }
+
+    @Published var kittyClaudeMatch: String {
+        didSet { defaults.set(kittyClaudeMatch, forKey: Key.kittyClaudeMatch) }
+    }
+
+    @Published var kittyCodexMatch: String {
+        didSet { defaults.set(kittyCodexMatch, forKey: Key.kittyCodexMatch) }
+    }
+
+    @Published var kittyClaudeAllSessions: Bool {
+        didSet {
+            defaults.set(kittyClaudeAllSessions, forKey: Key.kittyClaudeAllSessions)
+        }
+    }
+
+    @Published var kittyCodexAllSessions: Bool {
+        didSet {
+            defaults.set(kittyCodexAllSessions, forKey: Key.kittyCodexAllSessions)
+        }
+    }
+
+    @Published private(set) var kittyClaudeSessionIDs: Set<Int> {
+        didSet {
+            defaults.set(kittyClaudeSessionIDs.sorted(), forKey: Key.kittyClaudeSessionIDs)
+        }
+    }
+
+    @Published private(set) var kittyCodexSessionIDs: Set<Int> {
+        didSet {
+            defaults.set(kittyCodexSessionIDs.sorted(), forKey: Key.kittyCodexSessionIDs)
+        }
+    }
+
     init(
         defaults: UserDefaults = .standard,
         customSoundStore: CustomAlertSoundStore = CustomAlertSoundStore()
@@ -183,10 +269,82 @@ final class AppSettings: ObservableObject {
             }
             result[threshold] = sound
         }
+        autoContinueEnabled = defaults.bool(forKey: Key.autoContinueEnabled)
+        autoContinueClaudeEnabled = defaults.object(
+            forKey: Key.autoContinueClaudeEnabled
+        ) as? Bool ?? true
+        autoContinueCodexEnabled = defaults.object(
+            forKey: Key.autoContinueCodexEnabled
+        ) as? Bool ?? true
+        autoContinueTerminal = defaults.string(forKey: Key.autoContinueTerminal)
+            .flatMap(AutoContinueTerminal.init(rawValue:)) ?? .kitty
+        kittyExecutablePath = defaults.string(forKey: Key.kittyExecutablePath) ?? ""
+        kittyListenAddress = defaults.string(forKey: Key.kittyListenAddress)
+            ?? "unix:/tmp/model-meter-kitty"
+        kittyClaudeMatch = defaults.string(forKey: Key.kittyClaudeMatch)
+            ?? "cmdline:claude"
+        kittyCodexMatch = defaults.string(forKey: Key.kittyCodexMatch)
+            ?? "cmdline:codex"
+        kittyClaudeAllSessions = defaults.bool(forKey: Key.kittyClaudeAllSessions)
+        kittyCodexAllSessions = defaults.bool(forKey: Key.kittyCodexAllSessions)
+        kittyClaudeSessionIDs = Set(
+            defaults.array(forKey: Key.kittyClaudeSessionIDs)?
+                .compactMap { ($0 as? NSNumber)?.intValue } ?? []
+        )
+        kittyCodexSessionIDs = Set(
+            defaults.array(forKey: Key.kittyCodexSessionIDs)?
+                .compactMap { ($0 as? NSNumber)?.intValue } ?? []
+        )
     }
 
     static let allowedRefreshMinutes = [1, 5, 10, 15, 30]
     static let allowedAlertThresholdPercents = [0, 5, 10, 15, 20, 25, 30, 40, 50]
+
+    func autoContinueEnabled(for provider: ProviderID) -> Bool {
+        guard autoContinueEnabled else { return false }
+        return switch provider {
+        case .claude: autoContinueClaudeEnabled
+        case .codex: autoContinueCodexEnabled
+        }
+    }
+
+    func kittyMatch(for provider: ProviderID) -> String {
+        switch provider {
+        case .claude: kittyClaudeMatch
+        case .codex: kittyCodexMatch
+        }
+    }
+
+    func kittyAllSessions(for provider: ProviderID) -> Bool {
+        switch provider {
+        case .claude: kittyClaudeAllSessions
+        case .codex: kittyCodexAllSessions
+        }
+    }
+
+    func kittySessionIDs(for provider: ProviderID) -> Set<Int> {
+        switch provider {
+        case .claude: kittyClaudeSessionIDs
+        case .codex: kittyCodexSessionIDs
+        }
+    }
+
+    func setKittySession(_ id: Int, enabled: Bool, for provider: ProviderID) {
+        switch provider {
+        case .claude:
+            if enabled {
+                kittyClaudeSessionIDs.insert(id)
+            } else {
+                kittyClaudeSessionIDs.remove(id)
+            }
+        case .codex:
+            if enabled {
+                kittyCodexSessionIDs.insert(id)
+            } else {
+                kittyCodexSessionIDs.remove(id)
+            }
+        }
+    }
 
     func addUsageAlertThreshold(_ percent: Int) {
         usageAlertThresholdPercents = Self.normalizedAlertThresholds(

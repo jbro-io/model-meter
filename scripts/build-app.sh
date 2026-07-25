@@ -8,7 +8,11 @@ BUNDLE="$ROOT/dist/Model Meter.app"
 CONTENTS="$BUNDLE/Contents"
 
 cd "$ROOT"
-swift build --configuration "$CONFIGURATION"
+SWIFT_BUILD_ARGUMENTS=(--configuration "$CONFIGURATION")
+if [[ "${MODEL_METER_DISABLE_SWIFTPM_SANDBOX:-0}" == "1" ]]; then
+    SWIFT_BUILD_ARGUMENTS+=(--disable-sandbox)
+fi
+swift build "${SWIFT_BUILD_ARGUMENTS[@]}"
 
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 cp "$ROOT/.build/$CONFIGURATION/ModelMeter" "$CONTENTS/MacOS/ModelMeter"
