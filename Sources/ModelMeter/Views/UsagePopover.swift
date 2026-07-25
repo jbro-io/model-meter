@@ -4,14 +4,17 @@ import SwiftUI
 struct UsagePopover: View {
     @ObservedObject var store: UsageStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var autoContinueController: AutoContinueController
     let openSettings: @MainActor () -> Void
     let openProviderWindow: @MainActor (ProviderID) -> Void
     let openCombinedWindow: @MainActor () -> Void
     let openAllProviderWindows: @MainActor () -> Void
+    @State private var showsSessionManager = false
 
     init(
         store: UsageStore,
         settings: AppSettings,
+        autoContinueController: AutoContinueController,
         openSettings: @escaping @MainActor () -> Void,
         openProviderWindow: @escaping @MainActor (ProviderID) -> Void,
         openCombinedWindow: @escaping @MainActor () -> Void,
@@ -19,6 +22,7 @@ struct UsagePopover: View {
     ) {
         self.store = store
         self.settings = settings
+        self.autoContinueController = autoContinueController
         self.openSettings = openSettings
         self.openProviderWindow = openProviderWindow
         self.openCombinedWindow = openCombinedWindow
@@ -81,11 +85,11 @@ struct UsagePopover: View {
     }
 
     private var header: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 8) {
             Image(systemName: "gauge.with.dots.needle.67percent")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
+                .frame(width: 32, height: 32)
                 .background(
                     LinearGradient(
                         colors: [.blue, .indigo],
@@ -99,12 +103,13 @@ struct UsagePopover: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Model Meter")
                     .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .lineLimit(1)
                 Text(refreshDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-
-            Spacer()
+            .frame(minWidth: 74, maxWidth: .infinity, alignment: .leading)
 
             Picker("Quota display", selection: $settings.usageDisplayMode) {
                 ForEach(UsageDisplayMode.allCases) { mode in
@@ -114,7 +119,7 @@ struct UsagePopover: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
-            .frame(width: 96)
+            .frame(width: 86)
             .help("Show quota used or amount left")
             .accessibilityLabel("Quota display")
 
@@ -132,9 +137,38 @@ struct UsagePopover: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .controlSize(.small)
-            .frame(width: 30, height: 30)
+            .frame(width: 28, height: 28)
             .help("Open dashboard window")
             .accessibilityLabel("Open dashboard window")
+
+            Button {
+                showsSessionManager.toggle()
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "terminal")
+
+                    Circle()
+                        .fill(settings.autoContinueEnabled ? Color.green : Color.secondary)
+                        .frame(width: 6, height: 6)
+                        .overlay(Circle().stroke(.background, lineWidth: 1))
+                        .offset(x: 3, y: -2)
+                }
+            }
+            .modelMeterGlassButton()
+            .controlSize(.small)
+            .frame(width: 28, height: 28)
+            .help("Manage Auto-Continue sessions")
+            .accessibilityLabel("Manage Auto-Continue sessions")
+            .popover(isPresented: $showsSessionManager, arrowEdge: .bottom) {
+                AutoContinueQuickPanel(
+                    settings: settings,
+                    controller: autoContinueController,
+                    openSettings: {
+                        showsSessionManager = false
+                        openSettings()
+                    }
+                )
+            }
 
             Button {
                 store.refresh()
@@ -148,7 +182,7 @@ struct UsagePopover: View {
             }
             .modelMeterGlassButton()
             .controlSize(.small)
-            .frame(width: 30, height: 30)
+            .frame(width: 28, height: 28)
             .help("Refresh usage")
             .disabled(store.isRefreshing)
             .accessibilityLabel("Refresh usage")

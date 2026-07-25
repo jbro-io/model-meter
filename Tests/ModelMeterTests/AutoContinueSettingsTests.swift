@@ -14,6 +14,8 @@ final class AutoContinueSettingsTests: XCTestCase {
         XCTAssertFalse(settings.kittyAllSessions(for: .claude))
         XCTAssertFalse(settings.kittyAllSessions(for: .codex))
         XCTAssertTrue(settings.kittySessionIDs(for: .claude).isEmpty)
+        XCTAssertEqual(settings.kittyMatch(for: .claude), "smart:claude")
+        XCTAssertEqual(settings.kittyMatch(for: .codex), "smart:codex")
 
         settings.autoContinueEnabled = true
         settings.setKittySession(17, enabled: true, for: .claude)

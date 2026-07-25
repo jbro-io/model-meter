@@ -6,6 +6,7 @@ struct KittySessionTarget: Identifiable, Equatable, Sendable {
     let windowTitle: String
     let currentDirectory: String?
     let commandLine: [String]
+    let foregroundCommandLines: [[String]]
 
     var displayTitle: String {
         let cleanedTab = KittySessionTitleFormatter.clean(tabTitle)
@@ -22,6 +23,19 @@ struct KittySessionTarget: Identifiable, Equatable, Sendable {
         return cleanedTab.isEmpty
             ? (cleanedWindow.isEmpty ? "Kitty session \(id)" : cleanedWindow)
             : cleanedTab
+    }
+
+    func matchesSmartQuery(_ query: String) -> Bool {
+        let needle = query.lowercased()
+        guard !needle.isEmpty else { return false }
+        let searchableValues = [
+            tabTitle,
+            windowTitle,
+            commandLine.joined(separator: " ")
+        ] + foregroundCommandLines.map { $0.joined(separator: " ") }
+        return searchableValues.contains {
+            $0.localizedCaseInsensitiveContains(needle)
+        }
     }
 }
 
@@ -85,23 +99,15 @@ struct KittyRemoteControlClient: @unchecked Sendable {
         match: String
     ) async throws -> KittyTargetSummary {
         let executable = try resolveExecutable(configuredPath: configuredPath)
-        let address = listenAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !address.isEmpty else { throw KittyRemoteControlError.missingListenAddress }
+        let address = try resolveListenAddress(configuredAddress: listenAddress)
         let normalizedMatch = match.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedMatch.isEmpty else { throw KittyRemoteControlError.missingMatch }
 
-        let output = try await runner.run(
+        return try await matchingTargets(
             executable: executable,
-            arguments: [
-                "@", "--to", address, "ls", "--match", normalizedMatch
-            ],
-            timeout: 8
+            address: address,
+            match: normalizedMatch
         )
-        guard output.exitCode == 0 else {
-            throw commandError(from: output)
-        }
-
-        return try Self.parseTargetSummary(output.standardOutput)
     }
 
     func sendContinue(
@@ -110,15 +116,17 @@ struct KittyRemoteControlClient: @unchecked Sendable {
         match: String,
         selectedWindowIDs: Set<Int>?
     ) async throws -> KittyTargetSummary {
+        let executable = try resolveExecutable(configuredPath: configuredPath)
+        let address = try resolveListenAddress(configuredAddress: listenAddress)
+        let normalizedMatch = match.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedMatch.isEmpty else { throw KittyRemoteControlError.missingMatch }
         let matching = try await matchingTargets(
-            configuredPath: configuredPath,
-            listenAddress: listenAddress,
-            match: match
+            executable: executable,
+            address: address,
+            match: normalizedMatch
         )
         guard matching.windowCount > 0 else {
-            throw KittyRemoteControlError.noMatchingWindows(
-                match.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+            throw KittyRemoteControlError.noMatchingWindows(normalizedMatch)
         }
 
         let targets: [KittySessionTarget]
@@ -131,7 +139,6 @@ struct KittyRemoteControlClient: @unchecked Sendable {
             targets = matching.targets
         }
 
-        let executable = try resolveExecutable(configuredPath: configuredPath)
         let exactMatch = targets
             .map { "id:\($0.id)" }
             .joined(separator: " or ")
@@ -140,7 +147,7 @@ struct KittyRemoteControlClient: @unchecked Sendable {
             arguments: [
                 "@",
                 "--to",
-                listenAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+                address,
                 "send-text",
                 "--match",
                 exactMatch,
@@ -152,6 +159,59 @@ struct KittyRemoteControlClient: @unchecked Sendable {
             throw commandError(from: output)
         }
         return KittyTargetSummary(targets: targets)
+    }
+
+    private func matchingTargets(
+        executable: URL,
+        address: String,
+        match: String
+    ) async throws -> KittyTargetSummary {
+        if let smartQuery = smartQuery(from: match) {
+            let summary = try await allTargets(executable: executable, address: address)
+            return KittyTargetSummary(
+                targets: summary.targets.filter { $0.matchesSmartQuery(smartQuery) }
+            )
+        }
+
+        let output = try await runner.run(
+            executable: executable,
+            arguments: [
+                "@", "--to", address, "ls", "--match", match
+            ],
+            timeout: 8
+        )
+        if output.exitCode != 0,
+           output.stderrString.localizedCaseInsensitiveContains("no matching windows") {
+            return KittyTargetSummary(targets: [])
+        }
+        guard output.exitCode == 0 else {
+            throw commandError(from: output)
+        }
+        return try Self.parseTargetSummary(output.standardOutput)
+    }
+
+    private func allTargets(
+        executable: URL,
+        address: String
+    ) async throws -> KittyTargetSummary {
+        let output = try await runner.run(
+            executable: executable,
+            arguments: ["@", "--to", address, "ls"],
+            timeout: 8
+        )
+        guard output.exitCode == 0 else {
+            throw commandError(from: output)
+        }
+        return try Self.parseTargetSummary(output.standardOutput)
+    }
+
+    private func smartQuery(from match: String) -> String? {
+        let components = match.split(separator: ":", maxSplits: 1)
+        guard components.count == 2,
+              String(components[0]).caseInsensitiveCompare("smart") == .orderedSame
+        else { return nil }
+        let query = components[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? nil : query
     }
 
     static func parseTargetSummary(_ data: Data) throws -> KittyTargetSummary {
@@ -174,7 +234,10 @@ struct KittyRemoteControlClient: @unchecked Sendable {
                             tabTitle: tabTitle,
                             windowTitle: window["title"] as? String ?? "",
                             currentDirectory: window["cwd"] as? String,
-                            commandLine: window["cmdline"] as? [String] ?? []
+                            commandLine: window["cmdline"] as? [String] ?? [],
+                            foregroundCommandLines: (
+                                window["foreground_processes"] as? [[String: Any]]
+                            )?.compactMap { $0["cmdline"] as? [String] } ?? []
                         )
                     )
                 }
@@ -212,12 +275,166 @@ struct KittyRemoteControlClient: @unchecked Sendable {
         }
     }
 
+    private func resolveListenAddress(configuredAddress: String) throws -> String {
+        let resolver = KittyListenAddressResolver(
+            fileManager: fileManager,
+            environment: environment,
+            homeDirectory: homeDirectory
+        )
+        if let address = resolver.resolve(configuredAddress: configuredAddress) {
+            return address
+        }
+        throw KittyRemoteControlError.missingListenAddress
+    }
+
     private func commandError(from output: CommandOutput) -> KittyRemoteControlError {
         let detail = output.stderrString
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return .commandFailed(
             detail.isEmpty ? "the command exited with status \(output.exitCode)" : detail
         )
+    }
+}
+
+struct KittyListenAddressResolver: @unchecked Sendable {
+    private let fileManager: FileManager
+    private let environment: [String: String]
+    private let homeDirectory: URL
+
+    init(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) {
+        self.fileManager = fileManager
+        self.environment = environment
+        self.homeDirectory = homeDirectory
+    }
+
+    func resolve(configuredAddress: String) -> String? {
+        var addresses: [String] = []
+        let configured = normalizedAddress(configuredAddress)
+        if let configured {
+            addresses.append(configured)
+        }
+        if let kittyConfigAddress = listenAddressFromKittyConfig(),
+           !addresses.contains(kittyConfigAddress) {
+            addresses.append(kittyConfigAddress)
+        }
+
+        for address in addresses {
+            if exactSocketExists(for: address) {
+                return address
+            }
+            if let liveAddress = newestPIDSuffixedAddress(for: address) {
+                return liveAddress
+            }
+        }
+        return configured ?? addresses.first
+    }
+
+    func parseListenAddress(from configuration: String) -> String? {
+        configuration
+            .split(whereSeparator: \.isNewline)
+            .compactMap { rawLine -> String? in
+                let line = rawLine.trimmingCharacters(in: .whitespaces)
+                guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+                let components = line.split(
+                    maxSplits: 1,
+                    whereSeparator: \.isWhitespace
+                )
+                guard components.count == 2, components[0] == "listen_on" else {
+                    return nil
+                }
+                return normalizedAddress(String(components[1]))
+            }
+            .last
+    }
+
+    private func listenAddressFromKittyConfig() -> String? {
+        for url in configurationCandidates() {
+            guard let data = fileManager.contents(atPath: url.path),
+                  let configuration = String(data: data, encoding: .utf8),
+                  let address = parseListenAddress(from: configuration)
+            else { continue }
+            return address
+        }
+        return nil
+    }
+
+    private func configurationCandidates() -> [URL] {
+        var urls: [URL] = []
+        if let directory = environment["KITTY_CONFIG_DIRECTORY"], !directory.isEmpty {
+            urls.append(
+                URL(fileURLWithPath: (directory as NSString).expandingTildeInPath)
+                    .appendingPathComponent("kitty.conf")
+            )
+        }
+        if let directory = environment["XDG_CONFIG_HOME"], !directory.isEmpty {
+            urls.append(
+                URL(fileURLWithPath: (directory as NSString).expandingTildeInPath)
+                    .appendingPathComponent("kitty/kitty.conf")
+            )
+        }
+        urls.append(
+            homeDirectory.appendingPathComponent(".config/kitty/kitty.conf")
+        )
+        urls.append(
+            homeDirectory.appendingPathComponent(
+                "Library/Preferences/kitty/kitty.conf"
+            )
+        )
+
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.standardizedFileURL.path).inserted }
+    }
+
+    private func normalizedAddress(_ value: String) -> String? {
+        let address = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !address.isEmpty,
+              address.caseInsensitiveCompare("none") != .orderedSame
+        else { return nil }
+        return address
+    }
+
+    private func exactSocketExists(for address: String) -> Bool {
+        guard let path = unixSocketPath(from: address) else { return true }
+        return fileManager.fileExists(atPath: path)
+    }
+
+    private func newestPIDSuffixedAddress(for address: String) -> String? {
+        guard let socketPath = unixSocketPath(from: address) else { return nil }
+        let url = URL(fileURLWithPath: socketPath)
+        let directory = url.deletingLastPathComponent()
+        let prefix = url.lastPathComponent + "-"
+        guard let candidates = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+
+        let matches = candidates.filter {
+            $0.lastPathComponent.hasPrefix(prefix)
+                && fileManager.fileExists(atPath: $0.path)
+        }
+        let newest = matches.max { lhs, rhs in
+            let leftDate = (try? lhs.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ).contentModificationDate) ?? .distantPast
+            let rightDate = (try? rhs.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ).contentModificationDate) ?? .distantPast
+            return leftDate < rightDate
+        }
+        guard let newest else { return nil }
+        return "unix:\(newest.path)"
+    }
+
+    private func unixSocketPath(from address: String) -> String? {
+        guard address.hasPrefix("unix:") else { return nil }
+        let path = String(address.dropFirst("unix:".count))
+        guard !path.isEmpty, !path.hasPrefix("@") else { return nil }
+        return (path as NSString).expandingTildeInPath
     }
 }
 

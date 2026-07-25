@@ -30,7 +30,10 @@ final class KittyRemoteControlClientTests: XCTestCase {
                         "id": 102,
                         "title": "API cleanup — Codex",
                         "cwd": "/Users/test/api",
-                        "cmdline": ["codex"]
+                        "cmdline": ["/bin/zsh"],
+                        "foreground_processes": [
+                          {"cmdline":["codex"],"cwd":"/Users/test/api","pid":42}
+                        ]
                       }
                     ]
                   }
@@ -48,6 +51,8 @@ final class KittyRemoteControlClientTests: XCTestCase {
         XCTAssertEqual(summary.targets[0].displayTitle, "Model Meter")
         XCTAssertEqual(summary.targets[0].currentDirectory, "/Users/test/model-meter")
         XCTAssertEqual(summary.targets[1].displayTitle, "API cleanup")
+        XCTAssertTrue(summary.targets[1].matchesSmartQuery("codex"))
+        XCTAssertFalse(summary.targets[1].matchesSmartQuery("claude"))
     }
 
     func testTitleCleanupRemovesANSIWhitespaceAndTerminalDecoration() {
@@ -67,5 +72,60 @@ final class KittyRemoteControlClientTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? KittyRemoteControlError, .malformedWindowList)
         }
+    }
+
+    func testParsesLastActiveListenAddressFromKittyConfiguration() {
+        let resolver = KittyListenAddressResolver()
+        let address = resolver.parseListenAddress(
+            from: """
+            # listen_on none
+            listen_on unix:/tmp/old-kitty
+            allow_remote_control yes
+            listen_on unix:/tmp/current-kitty
+            """
+        )
+
+        XCTAssertEqual(address, "unix:/tmp/current-kitty")
+    }
+
+    func testFallsBackToPIDSuffixedSocketFromKittyConfiguration() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appendingPathComponent(
+            "KittyListenAddressResolverTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let home = root.appendingPathComponent("home", isDirectory: true)
+        let configDirectory = home.appendingPathComponent(
+            ".config/kitty",
+            isDirectory: true
+        )
+        let socketBase = root.appendingPathComponent("agent-kitty-tabs").path
+        let liveSocket = socketBase + "-12345"
+        defer { try? fileManager.removeItem(at: root) }
+
+        try fileManager.createDirectory(
+            at: configDirectory,
+            withIntermediateDirectories: true
+        )
+        try Data("listen_on unix:\(socketBase)\n".utf8).write(
+            to: configDirectory.appendingPathComponent("kitty.conf")
+        )
+        XCTAssertTrue(fileManager.createFile(atPath: liveSocket, contents: Data()))
+
+        let resolver = KittyListenAddressResolver(
+            fileManager: fileManager,
+            environment: [:],
+            homeDirectory: home
+        )
+
+        let resolved = try XCTUnwrap(
+            resolver.resolve(configuredAddress: "unix:/tmp/missing-model-meter")
+        )
+        let resolvedPath = String(resolved.dropFirst("unix:".count))
+        XCTAssertEqual(
+            URL(fileURLWithPath: resolvedPath).lastPathComponent,
+            URL(fileURLWithPath: liveSocket).lastPathComponent
+        )
+        XCTAssertTrue(fileManager.fileExists(atPath: resolvedPath))
     }
 }

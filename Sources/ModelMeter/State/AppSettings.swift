@@ -311,10 +311,14 @@ final class AppSettings: ObservableObject {
         kittyExecutablePath = defaults.string(forKey: Key.kittyExecutablePath) ?? ""
         kittyListenAddress = defaults.string(forKey: Key.kittyListenAddress)
             ?? "unix:/tmp/model-meter-kitty"
-        kittyClaudeMatch = defaults.string(forKey: Key.kittyClaudeMatch)
-            ?? "cmdline:claude"
-        kittyCodexMatch = defaults.string(forKey: Key.kittyCodexMatch)
-            ?? "cmdline:codex"
+        kittyClaudeMatch = Self.normalizedKittyMatch(
+            defaults.string(forKey: Key.kittyClaudeMatch),
+            provider: .claude
+        )
+        kittyCodexMatch = Self.normalizedKittyMatch(
+            defaults.string(forKey: Key.kittyCodexMatch),
+            provider: .codex
+        )
         kittyClaudeAllSessions = defaults.bool(forKey: Key.kittyClaudeAllSessions)
         kittyCodexAllSessions = defaults.bool(forKey: Key.kittyCodexAllSessions)
         kittyClaudeSessionIDs = Set(
@@ -461,5 +465,18 @@ final class AppSettings: ObservableObject {
             Set(values.filter(allowedAlertThresholdPercents.contains))
         )
         .sorted(by: >)
+    }
+
+    private static func normalizedKittyMatch(
+        _ storedValue: String?,
+        provider: ProviderID
+    ) -> String {
+        let legacyDefault = "cmdline:\(provider.rawValue)"
+        guard let storedValue,
+              storedValue.caseInsensitiveCompare(legacyDefault) != .orderedSame
+        else {
+            return "smart:\(provider.rawValue)"
+        }
+        return storedValue
     }
 }

@@ -76,7 +76,7 @@ struct AutoContinueSettingsSection: View {
                         ForEach(settings.providerDisplayOrder.providers) { provider in
                             LabeledContent("\(provider.displayName) match") {
                                 TextField(
-                                    "cmdline:\(provider.rawValue)",
+                                    "smart:\(provider.rawValue)",
                                     text: kittyMatchBinding(for: provider)
                                 )
                                 .textFieldStyle(.roundedBorder)
@@ -92,7 +92,7 @@ struct AutoContinueSettingsSection: View {
                             }
                             .controlSize(.small)
 
-                            Text("Requires Kitty remote control over a local socket.")
+                            Text("Requires Kitty remote control over a local socket. Active PID-suffixed sockets are auto-detected from kitty.conf.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -375,12 +375,5 @@ struct AutoContinueSettingsSection: View {
         """
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(configuration, forType: .string)
-    }
-}
-
-private extension AutoContinueProviderStatus {
-    var isFailure: Bool {
-        if case .failed = self { return true }
-        return false
     }
 }

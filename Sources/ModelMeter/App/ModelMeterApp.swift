@@ -185,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: UsagePopover(
                 store: services.store,
                 settings: services.settings,
+                autoContinueController: services.autoContinueController,
                 openSettings: { [weak self] in
                     self?.showSettings()
                 },
