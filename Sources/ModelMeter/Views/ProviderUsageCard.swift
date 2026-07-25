@@ -5,12 +5,46 @@ enum ProviderCardActivityStyle: Sendable {
     case expanded
 }
 
+private enum ActivityHistoryRange: String, CaseIterable, Identifiable, Sendable {
+    case week
+    case month
+    case quarter
+
+    var id: String { rawValue }
+
+    var shortTitle: String {
+        switch self {
+        case .week: "7D"
+        case .month: "30D"
+        case .quarter: "3M"
+        }
+    }
+
+    var dayCount: Int {
+        switch self {
+        case .week: 7
+        case .month: 30
+        case .quarter: 90
+        }
+    }
+
+    var summaryTitle: String {
+        switch self {
+        case .week: "7 days"
+        case .month: "30 days"
+        case .quarter: "3 months"
+        }
+    }
+}
+
 struct ProviderUsageCard: View {
     let provider: ProviderID
     let state: ProviderLoadState
     let displayMode: UsageDisplayMode
     var activityStyle: ProviderCardActivityStyle = .compact
     var openWindow: (@MainActor () -> Void)? = nil
+    @State private var showsResetCredits = false
+    @State private var activityRange: ActivityHistoryRange = .week
 
     private let staleInterval: TimeInterval = 10 * 60
 
@@ -166,17 +200,25 @@ struct ProviderUsageCard: View {
 
                         if activityStyle == .expanded,
                            !snapshot.activity.dailyTokens.isEmpty {
-                            Text("7-day pulse")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
+                            Picker("Activity range", selection: $activityRange) {
+                                ForEach(ActivityHistoryRange.allCases) { range in
+                                    Text(range.shortTitle).tag(range)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .controlSize(.mini)
+                            .frame(width: 142)
+                            .help("Change activity graph range")
                         }
                     }
 
                     if activityStyle == .expanded,
                        !snapshot.activity.dailyTokens.isEmpty {
-                        WeeklyTokenPulseView(
+                        ActivityTokenPulseView(
                             days: snapshot.activity.dailyTokens,
-                            tint: provider.tint
+                            tint: provider.tint,
+                            range: activityRange
                         )
                     }
 
@@ -248,37 +290,99 @@ struct ProviderUsageCard: View {
     }
 
     private func resetCreditsSection(_ resetCredits: UsageResetCredits, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Usage limit resets")
-                    .font(.callout.weight(.semibold))
+        VStack(alignment: .leading, spacing: showsResetCredits ? 10 : 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.24)) {
+                    showsResetCredits.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            .green.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
 
-                Spacer(minLength: 8)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Usage limit resets")
+                            .font(.callout.weight(.semibold))
 
-                Text("\(resetCredits.availableCount) available")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(.green.opacity(0.14), in: Capsule())
+                        if let nearestExpiry = resetCredits.credits
+                            .compactMap(\.expiresAt)
+                            .min() {
+                            Text("Next expires \(nearestExpiry, style: .relative)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Granted reset credits")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text("\(resetCredits.availableCount)")
+                        .font(.system(.callout, design: .rounded, weight: .bold))
+                        .foregroundStyle(.green)
+                        .monospacedDigit()
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.14), in: Capsule())
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showsResetCredits ? 90 : 0))
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(showsResetCredits ? "Collapse reset credits" : "Show reset credits")
 
-            ForEach(resetCredits.credits) { credit in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(credit.title)
-                        .font(.callout.weight(.medium))
+            if showsResetCredits {
+                VStack(spacing: 7) {
+                    ForEach(resetCredits.credits) { credit in
+                        HStack(spacing: 9) {
+                            Image(systemName: "bolt.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.green)
+                                .frame(width: 24, height: 24)
+                                .background(.green.opacity(0.1), in: Circle())
 
-                    if let expiresAt = credit.expiresAt {
-                        Text(expiryDetails(for: expiresAt, now: now))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(credit.title)
+                                    .font(.callout.weight(.medium))
+
+                                if let expiresAt = credit.expiresAt {
+                                    Text(expiryDetails(for: expiresAt, now: now))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            .green.opacity(0.045),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Usage limit resets")
-        .accessibilityValue("\(resetCredits.availableCount) available")
+        .accessibilityValue(
+            "\(resetCredits.availableCount) available, \(showsResetCredits ? "expanded" : "collapsed")"
+        )
     }
 
     private func footer(_ snapshot: ProviderUsageSnapshot, now: Date) -> some View {
@@ -563,33 +667,76 @@ private struct ActivityMetricView: View {
     }
 }
 
-private struct WeeklyTokenPulseView: View {
+private struct ActivityPulseBucket: Identifiable {
+    let startDate: Date
+    let endDate: Date
+    let tokens: Int64
+
+    var id: Date { startDate }
+}
+
+private struct ActivityTokenPulseView: View {
     let days: [UsageActivityDay]
     let tint: Color
+    let range: ActivityHistoryRange
+
+    private var buckets: [ActivityPulseBucket] {
+        let visibleDays = Array(days.suffix(range.dayCount))
+        guard range == .quarter else {
+            return visibleDays.map {
+                ActivityPulseBucket(
+                    startDate: $0.date,
+                    endDate: $0.date,
+                    tokens: $0.tokens
+                )
+            }
+        }
+
+        return stride(from: 0, to: visibleDays.count, by: 7).map { startIndex in
+            let endIndex = min(startIndex + 7, visibleDays.count)
+            let slice = visibleDays[startIndex..<endIndex]
+            return ActivityPulseBucket(
+                startDate: slice.first?.date ?? .distantPast,
+                endDate: slice.last?.date ?? .distantPast,
+                tokens: slice.reduce(Int64(0)) { $0 + $1.tokens }
+            )
+        }
+    }
 
     private var maximum: Double {
-        Double(max(days.map(\.tokens).max() ?? 0, 1))
+        Double(max(buckets.map(\.tokens).max() ?? 0, 1))
     }
 
     private var total: Int64 {
-        days.reduce(Int64(0)) { $0 + $1.tokens }
+        buckets.reduce(Int64(0)) { $0 + $1.tokens }
+    }
+
+    private var barSpacing: CGFloat {
+        switch range {
+        case .week: 7
+        case .month: 2
+        case .quarter: 5
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             GeometryReader { geometry in
-                HStack(alignment: .bottom, spacing: 7) {
-                    ForEach(days) { day in
-                        let fraction = Double(day.tokens) / maximum
+                HStack(alignment: .bottom, spacing: barSpacing) {
+                    ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                        let fraction = Double(bucket.tokens) / maximum
                         VStack(spacing: 5) {
                             Spacer(minLength: 0)
 
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            RoundedRectangle(
+                                cornerRadius: range == .month ? 2 : 4,
+                                style: .continuous
+                            )
                                 .fill(
                                     LinearGradient(
                                         colors: [
-                                            tint.opacity(day.tokens == 0 ? 0.12 : 0.38),
-                                            tint.opacity(day.tokens == 0 ? 0.22 : 0.95)
+                                            tint.opacity(bucket.tokens == 0 ? 0.12 : 0.38),
+                                            tint.opacity(bucket.tokens == 0 ? 0.22 : 0.95)
                                         ],
                                         startPoint: .bottom,
                                         endPoint: .top
@@ -602,35 +749,50 @@ private struct WeeklyTokenPulseView: View {
                                     )
                                 )
                                 .overlay(alignment: .top) {
-                                    if Calendar.current.isDateInToday(day.date) {
+                                    if Calendar.current.isDateInToday(bucket.endDate) {
                                         Capsule()
                                             .fill(.white.opacity(0.85))
-                                            .frame(width: 9, height: 2)
+                                            .frame(
+                                                width: range == .month ? 3 : 9,
+                                                height: 2
+                                            )
                                             .padding(.top, 3)
                                     }
                                 }
-                                .help(
-                                    "\(day.date.formatted(date: .abbreviated, time: .omitted)): \(day.tokens.formatted(.number.notation(.compactName))) tokens"
-                                )
+                                .help(tooltip(for: bucket))
 
-                            Text(day.date.formatted(.dateTime.weekday(.narrow)))
-                                .font(.system(size: 9, weight: .medium, design: .rounded))
+                            Text(axisLabel(for: bucket, index: index))
+                                .font(
+                                    .system(
+                                        size: range == .month ? 8 : 9,
+                                        weight: .medium,
+                                        design: .rounded
+                                    )
+                                )
                                 .foregroundStyle(
-                                    Calendar.current.isDateInToday(day.date)
+                                    Calendar.current.isDateInToday(bucket.endDate)
                                         ? tint
                                         : .secondary
                                 )
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
             }
             .frame(height: 76)
+            .animation(.snappy(duration: 0.28), value: range)
 
             HStack {
-                Label("Tokens by day", systemImage: "waveform.path.ecg")
+                Label(
+                    range == .quarter ? "Tokens by week" : "Tokens by day",
+                    systemImage: "waveform.path.ecg"
+                )
                 Spacer()
-                Text("\(total.formatted(.number.notation(.compactName))) this week")
+                Text(
+                    "\(total.formatted(.number.notation(.compactName))) · \(range.summaryTitle)"
+                )
                     .monospacedDigit()
             }
             .font(.caption2)
@@ -652,8 +814,35 @@ private struct WeeklyTokenPulseView: View {
                 .stroke(tint.opacity(0.13), lineWidth: 0.5)
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Token usage over the last seven days")
-        .accessibilityValue("\(total) tokens this week")
+        .accessibilityLabel("Token usage over the last \(range.summaryTitle)")
+        .accessibilityValue("\(total) tokens")
+    }
+
+    private func axisLabel(for bucket: ActivityPulseBucket, index: Int) -> String {
+        switch range {
+        case .week:
+            bucket.startDate.formatted(.dateTime.weekday(.narrow))
+        case .month:
+            if index == 0 || index == buckets.count - 1 || index.isMultiple(of: 7) {
+                bucket.startDate.formatted(.dateTime.day())
+            } else {
+                ""
+            }
+        case .quarter:
+            if index == 0 || index == buckets.count - 1 || index.isMultiple(of: 2) {
+                bucket.startDate.formatted(.dateTime.month(.abbreviated).day())
+            } else {
+                ""
+            }
+        }
+    }
+
+    private func tooltip(for bucket: ActivityPulseBucket) -> String {
+        let count = bucket.tokens.formatted(.number.notation(.compactName))
+        if Calendar.current.isDate(bucket.startDate, inSameDayAs: bucket.endDate) {
+            return "\(bucket.startDate.formatted(date: .abbreviated, time: .omitted)): \(count) tokens"
+        }
+        return "\(bucket.startDate.formatted(date: .abbreviated, time: .omitted))–\(bucket.endDate.formatted(date: .abbreviated, time: .omitted)): \(count) tokens"
     }
 }
 

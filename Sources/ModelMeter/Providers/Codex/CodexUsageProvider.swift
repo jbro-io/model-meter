@@ -71,7 +71,7 @@ struct CodexUsageProvider: UsageProviding, Sendable {
                 sessionCostUSD: nil,
                 activeSessions: nil,
                 currentStreakDays: usage?.summary.currentStreakDays,
-                dailyTokens: Self.sevenDayHistory(
+                dailyTokens: Self.tokenHistory(
                     buckets: usage?.dailyUsageBuckets ?? [],
                     endingAt: fetchedAt
                 )
@@ -240,7 +240,7 @@ struct CodexUsageProvider: UsageProviding, Sendable {
         return formatter.string(from: date)
     }
 
-    private static func sevenDayHistory(
+    private static func tokenHistory(
         buckets: [CodexDailyUsageBucket],
         endingAt date: Date
     ) -> [UsageActivityDay] {
@@ -251,7 +251,7 @@ struct CodexUsageProvider: UsageProviding, Sendable {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         let today = calendar.startOfDay(for: date)
-        return (-6...0).compactMap { offset in
+        return (-89...0).compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: offset, to: today)
             else { return nil }
             return UsageActivityDay(

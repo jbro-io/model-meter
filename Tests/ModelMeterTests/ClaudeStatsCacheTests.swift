@@ -3,7 +3,7 @@ import XCTest
 @testable import ModelMeter
 
 final class ClaudeStatsCacheTests: XCTestCase {
-    func testParsesAggregateStatsAndBuildsSevenDayHistory() throws {
+    func testParsesAggregateStatsAndBuildsNinetyDayHistory() throws {
         let data = Data(
             """
             {
@@ -57,8 +57,11 @@ final class ClaudeStatsCacheTests: XCTestCase {
         XCTAssertEqual(stats.totalSessions, 42)
         XCTAssertEqual(stats.totalMessages, 900)
         XCTAssertEqual(stats.currentStreakDays, 3)
-        XCTAssertEqual(stats.dailyTokens.count, 7)
-        XCTAssertEqual(stats.dailyTokens.map(\.tokens), [0, 0, 0, 0, 0, 1_200, 2_500])
+        XCTAssertEqual(stats.dailyTokens.count, 90)
+        XCTAssertEqual(
+            stats.dailyTokens.suffix(7).map(\.tokens),
+            [0, 0, 0, 0, 0, 1_200, 2_500]
+        )
     }
 
     func testStreakCanContinueFromYesterdayWhenTodayHasNoActivity() throws {

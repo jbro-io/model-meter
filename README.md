@@ -63,7 +63,7 @@ claude --print --output-format json --no-session-persistence --safe-mode /usage
 
 It also runs `claude auth status --json` and `claude agents --json`. Safe mode avoids loading project hooks and plugins while retaining the CLI's own authentication. Model Meter does not extract OAuth tokens or call Anthropic's private usage endpoint itself.
 
-For the Activity panel, Model Meter reads Claude Code's aggregate `~/.claude/stats-cache.json`. Detached provider windows render a compact seven-day token pulse graph; constrained popover cards keep the smaller stat grid.
+For the Activity panel, Model Meter reads Claude Code's aggregate `~/.claude/stats-cache.json`. Detached provider windows render a token pulse graph with 7-day, 30-day, and 3-month ranges; constrained popover cards keep the smaller stat grid.
 
 Claude API-key, Bedrock, Vertex, and Foundry authentication do not expose subscription quota bars through `/usage`. In that case Model Meter still reports concurrent sessions and clearly points API spend reporting to Claude Console.
 

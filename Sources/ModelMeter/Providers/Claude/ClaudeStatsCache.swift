@@ -51,7 +51,7 @@ struct ClaudeStatsCacheParser {
                 now: now,
                 calendar: calendar
             ),
-            dailyTokens: sevenDayHistory(
+            dailyTokens: tokenHistory(
                 tokensByDay: tokensByDay,
                 now: now,
                 calendar: calendar
@@ -59,13 +59,13 @@ struct ClaudeStatsCacheParser {
         )
     }
 
-    private func sevenDayHistory(
+    private func tokenHistory(
         tokensByDay: [String: Int64],
         now: Date,
         calendar: Calendar
     ) -> [UsageActivityDay] {
         let today = calendar.startOfDay(for: now)
-        return (-6...0).compactMap { offset in
+        return (-89...0).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: offset, to: today)
             else { return nil }
             return UsageActivityDay(
