@@ -1,31 +1,31 @@
 import SwiftUI
 
 struct AutoContinueWorkspace: View {
-    private static let sessionsPerPage = 8
+    private static let sessionsPerPage = 5
 
     @ObservedObject var settings: AppSettings
     @ObservedObject var controller: AutoContinueController
     let close: @MainActor () -> Void
     let openSettings: @MainActor () -> Void
 
+    @State private var selectedProvider: ProviderID = .claude
     @State private var sessionPages: [ProviderID: Int] = [:]
 
     var body: some View {
         VStack(spacing: 11) {
             header
-            overviewStrip
-
-            HStack(spacing: 11) {
-                ForEach(settings.providerDisplayOrder.providers) { provider in
-                    providerCard(provider)
-                }
-            }
-            .frame(maxHeight: .infinity)
-
+            providerSelector
+            providerWorkspace(selectedProvider)
+                .id(selectedProvider)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             footer
         }
         .padding(14)
-        .onAppear(perform: scanAllProviders)
+        .animation(.snappy(duration: 0.24), value: selectedProvider)
+        .onAppear {
+            selectedProvider = settings.providerDisplayOrder.providers.first ?? .claude
+            scanAllProviders()
+        }
     }
 
     private var header: some View {
@@ -56,24 +56,24 @@ struct AutoContinueWorkspace: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Session Autopilot")
                     .font(.system(.title3, design: .rounded, weight: .bold))
-                Text("Choose exactly where each agent wakes back up")
+                Text("Full-width targeting for every live agent")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(settings.autoContinueEnabled ? Color.green : Color.secondary)
-                    .frame(width: 8, height: 8)
-                    .shadow(
-                        color: settings.autoContinueEnabled
-                            ? Color.green.opacity(0.45)
-                            : .clear,
-                        radius: 4
-                    )
+            HStack(spacing: 7) {
+                Image(systemName: connectionSystemImage)
+                    .foregroundStyle(connectionColor)
+                Text(connectionTitle)
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(connectionColor.opacity(0.08), in: Capsule())
 
+            HStack(spacing: 8) {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(settings.autoContinueEnabled ? "Autopilot on" : "Autopilot off")
                         .font(.caption.weight(.semibold))
@@ -87,134 +87,119 @@ struct AutoContinueWorkspace: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .modelMeterGlass(style: .clear, cornerRadius: 13)
         }
     }
 
-    private var overviewStrip: some View {
-        HStack(spacing: 0) {
-            overviewMetric(
-                title: connectionTitle,
-                detail: settings.autoContinueTerminal.title,
-                systemImage: connectionSystemImage,
-                color: connectionColor
-            )
-
-            overviewDivider
-
-            overviewMetric(
-                title: "\(enrolledSessionCount) enrolled",
-                detail: "Selected sessions",
-                systemImage: "checkmark.square.fill",
-                color: .blue
-            )
-
-            overviewDivider
-
-            overviewMetric(
-                title: armedProviderCount == 0
-                    ? "No recovery queued"
-                    : "\(armedProviderCount) recovery queued",
-                detail: "5-hour windows",
-                systemImage: "bolt.badge.clock.fill",
-                color: armedProviderCount == 0 ? .secondary : .orange
-            )
-        }
-        .padding(.vertical, 8)
-        .modelMeterGlass(style: .clear, cornerRadius: 15)
-    }
-
-    private var overviewDivider: some View {
-        Divider()
-            .frame(height: 28)
-    }
-
-    private func overviewMetric(
-        title: String,
-        detail: String,
-        systemImage: String,
-        color: Color
-    ) -> some View {
+    private var providerSelector: some View {
         HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(color)
-                .frame(width: 22)
+            ForEach(settings.providerDisplayOrder.providers) { provider in
+                Button {
+                    selectedProvider = provider
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: provider.systemImage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(provider.tint)
+                            .frame(width: 27, height: 27)
+                            .background(
+                                provider.tint.opacity(0.1),
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(provider.displayName)
+                                .font(.subheadline.weight(.semibold))
+                            Text(providerTabDetail(provider))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        if controller.isArmed(for: provider) {
+                            Label("Armed", systemImage: "bolt.fill")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        } else {
+                            Circle()
+                                .fill(
+                                    settings.autoContinueEnabled(for: provider)
+                                        ? Color.green
+                                        : Color.secondary.opacity(0.5)
+                                )
+                                .frame(width: 7, height: 7)
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(
+                                selectedProvider == provider
+                                    ? provider.tint
+                                    : Color.secondary.opacity(0.45)
+                            )
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        selectedProvider == provider
+                            ? provider.tint.opacity(0.09)
+                            : Color.primary.opacity(0.025),
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(
+                                selectedProvider == provider
+                                    ? provider.tint.opacity(0.28)
+                                    : Color.primary.opacity(0.07),
+                                lineWidth: selectedProvider == provider ? 1 : 0.5
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
             }
-
-            Spacer(minLength: 4)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
     }
 
-    private func providerCard(_ provider: ProviderID) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            providerHeader(provider)
+    private func providerWorkspace(_ provider: ProviderID) -> some View {
+        VStack(spacing: 10) {
+            providerCommandBar(provider)
 
-            if settings.autoContinueEnabled(for: provider) {
-                Picker(
-                    "Target scope",
-                    selection: allSessionsBinding(for: provider)
-                ) {
-                    Text("Selected Sessions").tag(false)
-                    Text("All Matching").tag(true)
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .controlSize(.small)
+            Divider()
 
-                Divider()
-
-                if settings.kittyAllSessions(for: provider) {
-                    allSessionsState(provider)
-                } else {
-                    selectedSessionsState(provider)
-                }
-
-                Divider()
-
-                providerFooter(provider)
+            if !settings.autoContinueEnabled(for: provider) {
+                disabledState(provider)
+            } else if settings.kittyAllSessions(for: provider) {
+                allSessionsState(provider)
             } else {
-                disabledProviderState(provider)
+                selectedSessionsState(provider)
             }
         }
         .padding(13)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .modelMeterGlass(
             style: .regular,
-            tint: provider.tint.opacity(0.12),
+            tint: provider.tint.opacity(0.1),
             cornerRadius: 18
         )
     }
 
-    private func providerHeader(_ provider: ProviderID) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: provider.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(provider.tint)
-                .frame(width: 30, height: 30)
-                .background(
-                    provider.tint.opacity(0.1),
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                )
+    private func providerCommandBar(_ provider: ProviderID) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text("\(provider.displayName) targets")
+                        .font(.headline)
+                    providerStatusBadge(provider)
+                }
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(provider.displayName)
-                    .font(.headline)
                 Text(providerSubtitle(provider))
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(
                         controller.status(for: provider).isFailure
                             ? Color.red
@@ -225,15 +210,25 @@ struct AutoContinueWorkspace: View {
 
             Spacer()
 
-            providerStatusBadge(provider)
-
             Toggle(
                 "Enable \(provider.displayName)",
                 isOn: providerEnabledBinding(for: provider)
             )
-            .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.small)
+
+            Picker(
+                "Target scope",
+                selection: allSessionsBinding(for: provider)
+            ) {
+                Text("Selected Sessions").tag(false)
+                Text("All Matching").tag(true)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 250)
+            .disabled(!settings.autoContinueEnabled(for: provider))
         }
     }
 
@@ -242,55 +237,13 @@ struct AutoContinueWorkspace: View {
         let sessions = controller.discoveredSessions[provider] ?? []
 
         if sessions.isEmpty {
-            VStack(spacing: 10) {
-                if controller.status(for: provider) == .scanning {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(
-                        systemName: controller.status(for: provider).isFailure
-                            ? "exclamationmark.triangle.fill"
-                            : "scope"
-                    )
-                    .font(.system(size: 25, weight: .light))
-                    .foregroundStyle(
-                        controller.status(for: provider).isFailure
-                            ? Color.red
-                            : provider.tint
-                    )
-                }
-
-                Text(emptyTitle(provider))
-                    .font(.subheadline.weight(.semibold))
-
-                Text(emptyDetail(provider))
-                    .font(.caption)
-                    .foregroundStyle(
-                        controller.status(for: provider).isFailure
-                            ? Color.red
-                            : Color.secondary
-                    )
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-
-                if controller.status(for: provider) != .scanning {
-                    Button {
-                        controller.scanTargets(for: provider)
-                    } label: {
-                        Label("Scan \(provider.displayName)", systemImage: "arrow.clockwise")
-                    }
-                    .controlSize(.small)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 12)
+            emptyState(provider)
         } else {
-            sessionGrid(sessions, provider: provider)
-                .frame(maxHeight: .infinity, alignment: .top)
+            sessionList(sessions, provider: provider)
         }
     }
 
-    private func sessionGrid(
+    private func sessionList(
         _ sessions: [KittySessionTarget],
         provider: ProviderID
     ) -> some View {
@@ -302,177 +255,194 @@ struct AutoContinueWorkspace: View {
         let start = page * Self.sessionsPerPage
         let end = min(start + Self.sessionsPerPage, sessions.count)
         let visibleSessions = Array(sessions[start..<end])
-        let columns = [
-            GridItem(.flexible(), spacing: 7),
-            GridItem(.flexible(), spacing: 7)
-        ]
+        let selectedCount = settings.kittySessionIDs(for: provider).count
 
-        return VStack(spacing: 8) {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 7) {
-                ForEach(visibleSessions) { session in
-                    sessionTile(session, provider: provider)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            if pageCount > 1 {
-                HStack(spacing: 8) {
-                    Button {
-                        sessionPages[provider] = max(page - 1, 0)
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(page == 0)
-
-                    Text("\(start + 1)–\(end) of \(sessions.count)")
-                        .font(.caption2.monospacedDigit())
+        return VStack(spacing: 7) {
+            HStack {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("LIVE SESSION TARGETS")
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
-
-                    Button {
-                        sessionPages[provider] = min(page + 1, pageCount - 1)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(page == pageCount - 1)
-                }
-            }
-        }
-    }
-
-    private func sessionTile(
-        _ session: KittySessionTarget,
-        provider: ProviderID
-    ) -> some View {
-        Toggle(
-            isOn: sessionEnabledBinding(session.id, provider: provider)
-        ) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(session.displayTitle)
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-
-                    Spacer(minLength: 2)
-
-                    Text("#\(session.id)")
-                        .font(.caption2.monospacedDigit())
+                        .tracking(0.7)
+                    Text("Click anywhere on a row to enroll or remove it.")
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
 
-                Text(
-                    session.currentDirectory.map(abbreviatedPath)
-                        ?? "Live Kitty tab"
+                Spacer()
+
+                Text("\(selectedCount) enrolled")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        selectedCount > 0 ? provider.tint : Color.secondary
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        (selectedCount > 0 ? provider.tint : Color.secondary)
+                            .opacity(0.08),
+                        in: Capsule()
+                    )
+
+                if pageCount > 1 {
+                    HStack(spacing: 7) {
+                        Button {
+                            sessionPages[provider] = max(page - 1, 0)
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(page == 0)
+
+                        Text("\(start + 1)–\(end) of \(sessions.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            sessionPages[provider] = min(page + 1, pageCount - 1)
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(page == pageCount - 1)
+                    }
+                }
+
+                Button {
+                    sessionPages[provider] = 0
+                    controller.scanTargets(for: provider)
+                } label: {
+                    Label("Rescan", systemImage: "arrow.clockwise")
+                }
+                .modelMeterGlassButton()
+                .controlSize(.small)
+                .disabled(controller.status(for: provider) == .scanning)
+            }
+
+            ForEach(visibleSessions) { session in
+                AutoContinueSessionRow(
+                    session: session,
+                    provider: provider,
+                    isEnrolled: sessionEnabledBinding(
+                        session.id,
+                        provider: provider
+                    )
                 )
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func emptyState(_ provider: ProviderID) -> some View {
+        VStack(spacing: 10) {
+            if controller.status(for: provider) == .scanning {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(
+                    systemName: controller.status(for: provider).isFailure
+                        ? "exclamationmark.triangle.fill"
+                        : "rectangle.and.text.magnifyingglass"
+                )
+                .font(.system(size: 27, weight: .light))
+                .foregroundStyle(
+                    controller.status(for: provider).isFailure
+                        ? Color.red
+                        : provider.tint
+                )
+            }
+
+            Text(emptyTitle(provider))
+                .font(.subheadline.weight(.semibold))
+
+            Text(emptyDetail(provider))
+                .font(.caption)
+                .foregroundStyle(
+                    controller.status(for: provider).isFailure
+                        ? Color.red
+                        : Color.secondary
+                )
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+
+            if controller.status(for: provider) != .scanning {
+                Button {
+                    controller.scanTargets(for: provider)
+                } label: {
+                    Label("Scan \(provider.displayName)", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
             }
         }
-        .toggleStyle(.checkbox)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        .background(
-            settings.kittySessionIDs(for: provider).contains(session.id)
-                ? provider.tint.opacity(0.085)
-                : Color.primary.opacity(0.025),
-            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(
-                    settings.kittySessionIDs(for: provider).contains(session.id)
-                        ? provider.tint.opacity(0.22)
-                        : Color.primary.opacity(0.06),
-                    lineWidth: 0.5
-                )
-        )
-        .help(session.displayTitle)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 28)
     }
 
     private func allSessionsState(_ provider: ProviderID) -> some View {
-        VStack(spacing: 12) {
+        HStack(spacing: 24) {
             ZStack {
                 ForEach(0..<3, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(provider.tint.opacity(0.07 + Double(index) * 0.035))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .stroke(provider.tint.opacity(0.16), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(provider.tint.opacity(0.17), lineWidth: 0.6)
                         )
-                        .frame(width: 90, height: 54)
-                        .offset(x: CGFloat(index - 1) * 16)
+                        .frame(width: 128, height: 76)
+                        .offset(x: CGFloat(index - 1) * 24)
                 }
 
                 Image(systemName: "bolt.fill")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(provider.tint)
             }
-            .frame(height: 72)
+            .frame(width: 190)
 
-            Text("Every matching \(provider.displayName) tab")
-                .font(.subheadline.weight(.semibold))
-
-            Text("New sessions join automatically. Model Meter still validates every live target before typing anything.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-
-            Text(settings.kittyMatch(for: provider))
-                .font(.caption2.monospaced())
-                .foregroundStyle(provider.tint)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(provider.tint.opacity(0.08), in: Capsule())
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 16)
-    }
-
-    private func disabledProviderState(_ provider: ProviderID) -> some View {
-        VStack(spacing: 10) {
-            Image(systemName: "power")
-                .font(.system(size: 24, weight: .light))
-                .foregroundStyle(.secondary)
-            Text("\(provider.displayName) autopilot is off")
-                .font(.subheadline.weight(.semibold))
-            Text("Turn it on to select individual sessions or automatically target every matching tab.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 20)
-    }
-
-    private func providerFooter(_ provider: ProviderID) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                sessionPages[provider] = 0
-                controller.scanTargets(for: provider)
-            } label: {
-                Label("Rescan", systemImage: "arrow.clockwise")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Dynamic \(provider.displayName) targeting")
+                    .font(.title3.weight(.semibold))
+                Text("Every current and future matching tab is eligible. Model Meter validates live window IDs immediately before sending and never steals terminal focus.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(settings.kittyMatch(for: provider))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(provider.tint)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(provider.tint.opacity(0.08), in: Capsule())
             }
-            .buttonStyle(.plain)
-            .disabled(controller.status(for: provider) == .scanning)
 
             Spacer()
 
-            if settings.kittyAllSessions(for: provider) {
-                Text("Dynamic targeting")
-            } else {
-                let selectedCount = settings.kittySessionIDs(for: provider).count
-                Text("\(selectedCount) selected")
-                    .monospacedDigit()
+            Button {
+                controller.scanTargets(for: provider)
+            } label: {
+                Label("Validate Targets", systemImage: "checkmark.shield")
             }
+            .modelMeterGlassButton()
+            .controlSize(.small)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 34)
+    }
+
+    private func disabledState(_ provider: ProviderID) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: "power")
+                .font(.system(size: 27, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("\(provider.displayName) autopilot is off")
+                .font(.title3.weight(.semibold))
+            Text("Enable this provider above to enroll individual sessions or dynamically target every matching tab.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 40)
     }
 
     @ViewBuilder
@@ -516,10 +486,13 @@ struct AutoContinueWorkspace: View {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundStyle(.green)
-                Text("Local Kitty socket · exact window IDs · no terminal focus stealing")
+                Text("Local Kitty socket · exact window IDs · no focus stealing")
             }
 
             Spacer()
+
+            Text("\(enrolledSessionCount) total enrolled")
+                .monospacedDigit()
 
             Button {
                 scanAllProviders()
@@ -543,10 +516,6 @@ struct AutoContinueWorkspace: View {
         ProviderID.allCases.reduce(0) {
             $0 + settings.kittySessionIDs(for: $1).count
         }
-    }
-
-    private var armedProviderCount: Int {
-        ProviderID.allCases.filter { controller.isArmed(for: $0) }.count
     }
 
     private var connectionTitle: String {
@@ -590,31 +559,43 @@ struct AutoContinueWorkspace: View {
         return .secondary
     }
 
-    private func providerSubtitle(_ provider: ProviderID) -> String {
-        if !settings.autoContinueEnabled(for: provider) {
-            return "Disabled"
+    private func providerTabDetail(_ provider: ProviderID) -> String {
+        let liveCount = controller.discoveredSessions[provider]?.count ?? 0
+        if controller.status(for: provider) == .scanning {
+            return "Scanning live tabs…"
         }
+        if !settings.autoContinueEnabled(for: provider) {
+            return "Autopilot disabled"
+        }
+        if settings.kittyAllSessions(for: provider) {
+            return "\(liveCount) live · all matching"
+        }
+        let enrolled = settings.kittySessionIDs(for: provider).count
+        return "\(liveCount) live · \(enrolled) enrolled"
+    }
+
+    private func providerSubtitle(_ provider: ProviderID) -> String {
         if controller.isArmed(for: provider) {
             if let resetAt = controller.pendingResetDate(for: provider) {
-                return "Wakes at \(resetAt.formatted(date: .omitted, time: .shortened))"
+                return "Armed for \(resetAt.formatted(date: .omitted, time: .shortened))"
             }
-            return "Waiting for quota recovery"
+            return "Armed and waiting for the 5-hour quota to recover"
         }
         switch controller.status(for: provider) {
         case .scanning:
-            return "Discovering Kitty tabs…"
+            return "Reading foreground processes and cleaned Kitty tab titles…"
         case .ready(let summary):
             return summary.windowCount == 1
-                ? "1 live session"
-                : "\(summary.windowCount) live sessions"
+                ? "1 live session found"
+                : "\(summary.windowCount) live sessions found"
         case .sent(let count, _):
             return count == 1 ? "Continued 1 session" : "Continued \(count) sessions"
-        case .failed:
-            return "Kitty connection needs attention"
+        case .failed(let message):
+            return message
         default:
             return settings.kittyAllSessions(for: provider)
-                ? "All matching sessions"
-                : "\(settings.kittySessionIDs(for: provider).count) enrolled"
+                ? "Every matching session is eligible"
+                : "\(settings.kittySessionIDs(for: provider).count) sessions enrolled"
         }
     }
 
@@ -670,6 +651,135 @@ struct AutoContinueWorkspace: View {
             get: { settings.kittySessionIDs(for: provider).contains(id) },
             set: { settings.setKittySession(id, enabled: $0, for: provider) }
         )
+    }
+}
+
+private struct AutoContinueSessionRow: View {
+    let session: KittySessionTarget
+    let provider: ProviderID
+    @Binding var isEnrolled: Bool
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            isEnrolled.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                selectionControl
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.displayTitle)
+                        .font(.system(.body, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9, weight: .medium))
+                        Text(
+                            session.currentDirectory.map(abbreviatedPath)
+                                ?? "Live Kitty session"
+                        )
+                        .font(.caption.monospaced())
+                        .lineLimit(1)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 16)
+
+                Text("LIVE")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.green.opacity(0.08), in: Capsule())
+
+                Text("WINDOW #\(session.id)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 76, alignment: .trailing)
+
+                Text(isEnrolled ? "ENROLLED" : "AVAILABLE")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(
+                        isEnrolled ? provider.tint : Color.secondary
+                    )
+                    .frame(width: 64, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 11))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(
+                        isEnrolled
+                            ? provider.tint.opacity(0.3)
+                            : Color.primary.opacity(isHovering ? 0.13 : 0.065),
+                        lineWidth: isEnrolled ? 1 : 0.6
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(
+            isEnrolled
+                ? "Remove \(session.displayTitle) from Auto-Continue"
+                : "Enroll \(session.displayTitle) in Auto-Continue"
+        )
+        .accessibilityLabel(
+            "\(session.displayTitle), window \(session.id), "
+                + (isEnrolled ? "enrolled" : "not enrolled")
+        )
+    }
+
+    @ViewBuilder
+    private var selectionControl: some View {
+        ZStack {
+            if isEnrolled {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [provider.tint, provider.tint.opacity(0.72)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: provider.tint.opacity(0.22), radius: 3, y: 1)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(.white)
+            } else {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(isHovering ? 0.055 : 0.025))
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(
+                        isHovering
+                            ? provider.tint.opacity(0.55)
+                            : Color.secondary.opacity(0.35),
+                        lineWidth: 1
+                    )
+                Circle()
+                    .fill(Color.secondary.opacity(0.38))
+                    .frame(width: 4, height: 4)
+            }
+        }
+        .frame(width: 25, height: 25)
+    }
+
+    private var rowBackground: Color {
+        if isEnrolled {
+            return provider.tint.opacity(0.075)
+        }
+        if isHovering {
+            return provider.tint.opacity(0.035)
+        }
+        return Color.primary.opacity(0.018)
     }
 
     private func abbreviatedPath(_ path: String) -> String {
