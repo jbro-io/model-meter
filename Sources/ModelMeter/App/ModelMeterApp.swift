@@ -197,6 +197,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 openAllProviderWindows: { [weak self] in
                     self?.showAllProviderWindows()
+                },
+                resizePopover: { [weak self] size in
+                    self?.popover.contentSize = NSSize(
+                        width: size.width,
+                        height: size.height
+                    )
                 }
             )
         )

@@ -94,7 +94,7 @@ listen_on unix:/tmp/model-meter-kitty
 
 If Kitty already has a `listen_on` address, keep it—Model Meter discovers the address from `kitty.conf` and follows Kitty's PID-suffixed socket automatically. You can also enter an explicit address in Advanced settings.
 
-Open Model Meter Settings, enable Auto-Continue, and use **Scan** on the Claude or Codex card. Kitty tab titles are cleaned up and shown in the session list. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its foreground process or title. Advanced matching accepts Kitty's native match syntax or Model Meter's `smart:<provider>` matcher.
+Use the terminal button in Model Meter's popover to slide into the Session Autopilot workspace, or open the full Auto-Continue settings. Kitty tab titles are cleaned up and shown as session tiles. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its foreground process or title. Advanced matching accepts Kitty's native match syntax or Model Meter's `smart:<provider>` matcher.
 
 Model Meter verifies saved window IDs against live provider-matching Kitty windows before sending. It sends once per observed exhaustion/recovery cycle, persists an armed recovery across relaunches, wakes near the provider's reported reset time, and leaves a continuation armed if no enrolled session is available.
 

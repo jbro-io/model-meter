@@ -9,6 +9,11 @@ enum AutoContinueProviderStatus: Equatable, Sendable {
     case sending
     case sent(windowCount: Int, at: Date)
     case failed(String)
+
+    var isFailure: Bool {
+        if case .failed = self { return true }
+        return false
+    }
 }
 
 @MainActor

@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 struct UsagePopover: View {
+    static let dashboardSize = CGSize(width: 390, height: 640)
+    static let sessionWorkspaceSize = CGSize(width: 700, height: 640)
+
     @ObservedObject var store: UsageStore
     @ObservedObject var settings: AppSettings
     @ObservedObject var autoContinueController: AutoContinueController
@@ -9,6 +12,7 @@ struct UsagePopover: View {
     let openProviderWindow: @MainActor (ProviderID) -> Void
     let openCombinedWindow: @MainActor () -> Void
     let openAllProviderWindows: @MainActor () -> Void
+    let resizePopover: @MainActor (CGSize) -> Void
     @State private var showsSessionManager = false
 
     init(
@@ -18,7 +22,8 @@ struct UsagePopover: View {
         openSettings: @escaping @MainActor () -> Void,
         openProviderWindow: @escaping @MainActor (ProviderID) -> Void,
         openCombinedWindow: @escaping @MainActor () -> Void,
-        openAllProviderWindows: @escaping @MainActor () -> Void
+        openAllProviderWindows: @escaping @MainActor () -> Void,
+        resizePopover: @escaping @MainActor (CGSize) -> Void
     ) {
         self.store = store
         self.settings = settings
@@ -27,24 +32,51 @@ struct UsagePopover: View {
         self.openProviderWindow = openProviderWindow
         self.openCombinedWindow = openCombinedWindow
         self.openAllProviderWindows = openAllProviderWindows
+        self.resizePopover = resizePopover
     }
 
     var body: some View {
         ZStack {
             ModelMeterBackdrop()
-            dashboardContent
+
+            if showsSessionManager {
+                AutoContinueWorkspace(
+                    settings: settings,
+                    controller: autoContinueController,
+                    close: hideSessionManager,
+                    openSettings: {
+                        hideSessionManager()
+                        openSettings()
+                    }
+                )
+                .transition(
+                    .move(edge: .trailing)
+                        .combined(with: .opacity)
+                )
+            } else {
+                dashboardContent
+                    .transition(
+                        .move(edge: .leading)
+                            .combined(with: .opacity)
+                    )
+            }
         }
         .frame(
-            minWidth: 390,
-            idealWidth: 390,
-            maxWidth: 390,
-            minHeight: 640,
-            idealHeight: 640,
-            maxHeight: 640
+            width: showsSessionManager
+                ? Self.sessionWorkspaceSize.width
+                : Self.dashboardSize.width,
+            height: Self.dashboardSize.height
         )
+        .clipped()
+        .animation(.snappy(duration: 0.34), value: showsSessionManager)
         .onAppear {
             store.start()
             store.refreshIfStale()
+            resizePopover(
+                showsSessionManager
+                    ? Self.sessionWorkspaceSize
+                    : Self.dashboardSize
+            )
         }
     }
 
@@ -142,7 +174,7 @@ struct UsagePopover: View {
             .accessibilityLabel("Open dashboard window")
 
             Button {
-                showsSessionManager.toggle()
+                showSessionManager()
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "terminal")
@@ -159,16 +191,6 @@ struct UsagePopover: View {
             .frame(width: 28, height: 28)
             .help("Manage Auto-Continue sessions")
             .accessibilityLabel("Manage Auto-Continue sessions")
-            .popover(isPresented: $showsSessionManager, arrowEdge: .bottom) {
-                AutoContinueQuickPanel(
-                    settings: settings,
-                    controller: autoContinueController,
-                    openSettings: {
-                        showsSessionManager = false
-                        openSettings()
-                    }
-                )
-            }
 
             Button {
                 store.refresh()
@@ -221,5 +243,23 @@ struct UsagePopover: View {
         if store.isRefreshing { return "Reading both CLIs…" }
         guard let date = store.lastCompletedRefresh else { return "Waiting for first refresh" }
         return "Updated \(date.formatted(.relative(presentation: .named)))"
+    }
+
+    private func showSessionManager() {
+        resizePopover(Self.sessionWorkspaceSize)
+        withAnimation(.snappy(duration: 0.34)) {
+            showsSessionManager = true
+        }
+    }
+
+    private func hideSessionManager() {
+        withAnimation(.snappy(duration: 0.3)) {
+            showsSessionManager = false
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(260))
+            guard !showsSessionManager else { return }
+            resizePopover(Self.dashboardSize)
+        }
     }
 }
