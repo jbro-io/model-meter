@@ -12,6 +12,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Exact and relative reset times for quota windows when the CLI reports enough timing data
 - Independent stale/error states, so one provider can fail without hiding the other
 - A persistent Used / Remaining toggle for every graph and the menu-bar percentage
+- Configurable Claude-first or Codex-first ordering across every dashboard
 - Floating glass dashboards in either combined mode or independent Claude and Codex windows
 - Native Liquid Glass cards and controls on macOS 26, with a material fallback on earlier supported releases
 - Configurable native macOS alerts at one or more remaining-quota thresholds, with optional sound

@@ -24,14 +24,14 @@ struct ResponsiveProviderCards: View {
     private var responsiveProviderCards: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
-                ForEach(ProviderID.allCases) { provider in
+                ForEach(settings.providerDisplayOrder.providers) { provider in
                     providerCard(provider)
                         .frame(minWidth: 335, maxWidth: .infinity, alignment: .top)
                 }
             }
 
             VStack(spacing: 12) {
-                ForEach(ProviderID.allCases) { provider in
+                ForEach(settings.providerDisplayOrder.providers) { provider in
                     providerCard(provider)
                 }
             }

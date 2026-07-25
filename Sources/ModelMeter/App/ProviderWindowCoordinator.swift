@@ -216,7 +216,7 @@ final class ProviderWindowCoordinator {
     }
 
     func presentAll(on screen: NSScreen?) {
-        let pair = ProviderID.allCases.map(controller(for:))
+        let pair = settings.providerDisplayOrder.providers.map(controller(for:))
         let visibleFrame = preferredVisibleFrame(on: screen)
 
         if let visibleFrame {

@@ -202,24 +202,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func observeUsage() {
-        stateCancellable = Publishers.CombineLatest(
+        stateCancellable = Publishers.CombineLatest3(
             services.store.$states,
-            services.settings.$usageDisplayMode
+            services.settings.$usageDisplayMode,
+            services.settings.$providerDisplayOrder
         )
             .receive(on: RunLoop.main)
-            .sink { [weak self] states, displayMode in
-                self?.updateStatusItem(with: states, displayMode: displayMode)
+            .sink { [weak self] states, displayMode, providerOrder in
+                self?.updateStatusItem(
+                    with: states,
+                    displayMode: displayMode,
+                    providerOrder: providerOrder
+                )
             }
     }
 
     private func updateStatusItem(
         with states: [ProviderID: ProviderLoadState],
-        displayMode: UsageDisplayMode
+        displayMode: UsageDisplayMode,
+        providerOrder: ProviderDisplayOrder
     ) {
         guard let button = statusItem?.button else { return }
         let rows = StatusItemPresentation.rows(
             states: states,
-            displayMode: displayMode
+            displayMode: displayMode,
+            providers: providerOrder.providers
         )
         statusItem?.length = StatusItemDashboard.preferredWidth(for: rows)
 

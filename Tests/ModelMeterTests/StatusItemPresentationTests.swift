@@ -142,6 +142,16 @@ final class StatusItemPresentationTests: XCTestCase {
         XCTAssertTrue(rows.allSatisfy { !$0.hasError })
     }
 
+    func testRowsRespectConfiguredProviderOrder() {
+        let rows = StatusItemPresentation.rows(
+            states: [:],
+            displayMode: .used,
+            providers: [.codex, .claude]
+        )
+
+        XCTAssertEqual(rows.map(\.provider), [.codex, .claude])
+    }
+
     private func compactLabel(for title: String) -> String {
         StatusItemPresentation.compactWindowTitle(
             limit(id: title, title: title, usedFraction: 0)

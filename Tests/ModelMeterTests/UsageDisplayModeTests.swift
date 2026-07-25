@@ -34,6 +34,23 @@ final class UsageDisplayModeTests: XCTestCase {
     }
 
     @MainActor
+    func testProviderDisplayOrderDefaultsAndPersists() throws {
+        let suiteName = "ModelMeterOrderTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.providerDisplayOrder, .claudeFirst)
+        XCTAssertEqual(settings.providerDisplayOrder.providers, [.claude, .codex])
+
+        settings.providerDisplayOrder = .codexFirst
+
+        let restored = AppSettings(defaults: defaults)
+        XCTAssertEqual(restored.providerDisplayOrder, .codexFirst)
+        XCTAssertEqual(restored.providerDisplayOrder.providers, [.codex, .claude])
+    }
+
+    @MainActor
     func testMultipleAlertThresholdsAndSoundPersist() throws {
         let suiteName = "ModelMeterAlertSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

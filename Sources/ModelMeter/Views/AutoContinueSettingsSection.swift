@@ -42,7 +42,7 @@ struct AutoContinueSettingsSection: View {
                     .frame(width: 160)
                 }
 
-                ForEach(ProviderID.allCases) { provider in
+                ForEach(settings.providerDisplayOrder.providers) { provider in
                     providerCard(provider)
                 }
 
@@ -73,7 +73,7 @@ struct AutoContinueSettingsSection: View {
                             .frame(maxWidth: 430)
                         }
 
-                        ForEach(ProviderID.allCases) { provider in
+                        ForEach(settings.providerDisplayOrder.providers) { provider in
                             LabeledContent("\(provider.displayName) match") {
                                 TextField(
                                     "cmdline:\(provider.rawValue)",

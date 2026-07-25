@@ -21,7 +21,8 @@ struct StatusItemDashboard: View {
     var body: some View {
         let rows = StatusItemPresentation.rows(
             states: store.states,
-            displayMode: settings.usageDisplayMode
+            displayMode: settings.usageDisplayMode,
+            providers: settings.providerDisplayOrder.providers
         )
         let labelWidth = Self.preferredLabelWidth(for: rows)
 
@@ -86,9 +87,10 @@ struct StatusItemPresentation {
 
     static func rows(
         states: [ProviderID: ProviderLoadState],
-        displayMode: UsageDisplayMode
+        displayMode: UsageDisplayMode,
+        providers: [ProviderID] = ProviderID.allCases
     ) -> [Row] {
-        ProviderID.allCases.map { provider in
+        providers.map { provider in
             let state = states[provider]
             let candidate = state?.snapshot?.limits
                 .map { limit in

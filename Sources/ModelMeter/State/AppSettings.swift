@@ -37,6 +37,27 @@ enum UsageDisplayMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum ProviderDisplayOrder: String, CaseIterable, Identifiable, Sendable {
+    case claudeFirst
+    case codexFirst
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .claudeFirst: "Claude · Codex"
+        case .codexFirst: "Codex · Claude"
+        }
+    }
+
+    var providers: [ProviderID] {
+        switch self {
+        case .claudeFirst: [.claude, .codex]
+        case .codexFirst: [.codex, .claude]
+        }
+    }
+}
+
 enum UsageAlertSound: String, CaseIterable, Identifiable, Sendable {
     case defaultSound
     case basso
@@ -98,6 +119,7 @@ final class AppSettings: ObservableObject {
         static let codexPath = "codexExecutablePath"
         static let refreshMinutes = "refreshMinutes"
         static let usageDisplayMode = "usageDisplayMode"
+        static let providerDisplayOrder = "providerDisplayOrder"
         static let usageAlertsEnabled = "usageAlertsEnabled"
         static let usageAlertThresholdPercents = "usageAlertThresholdPercents"
         static let usageAlertSound = "usageAlertSound"
@@ -134,6 +156,12 @@ final class AppSettings: ObservableObject {
 
     @Published var usageDisplayMode: UsageDisplayMode {
         didSet { defaults.set(usageDisplayMode.rawValue, forKey: Key.usageDisplayMode) }
+    }
+
+    @Published var providerDisplayOrder: ProviderDisplayOrder {
+        didSet {
+            defaults.set(providerDisplayOrder.rawValue, forKey: Key.providerDisplayOrder)
+        }
     }
 
     @Published var usageAlertsEnabled: Bool {
@@ -243,6 +271,8 @@ final class AppSettings: ObservableObject {
         refreshMinutes = Self.allowedRefreshMinutes.contains(storedInterval) ? storedInterval : 5
         usageDisplayMode = defaults.string(forKey: Key.usageDisplayMode)
             .flatMap(UsageDisplayMode.init(rawValue:)) ?? .used
+        providerDisplayOrder = defaults.string(forKey: Key.providerDisplayOrder)
+            .flatMap(ProviderDisplayOrder.init(rawValue:)) ?? .claudeFirst
         usageAlertsEnabled = defaults.bool(forKey: Key.usageAlertsEnabled)
         let storedThresholds = defaults.array(forKey: Key.usageAlertThresholdPercents)?
             .compactMap { ($0 as? NSNumber)?.intValue }

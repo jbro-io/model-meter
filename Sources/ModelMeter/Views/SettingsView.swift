@@ -24,7 +24,15 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 260)
 
-                    Text("This changes the menu-bar percentage and every quota graph.")
+                    Picker("Model order", selection: $settings.providerDisplayOrder) {
+                        ForEach(ProviderDisplayOrder.allCases) { order in
+                            Text(order.title).tag(order)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+
+                    Text("Model order applies to the menu bar, popover, combined dashboard, and separate-window layout.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -233,7 +241,7 @@ struct SettingsView: View {
         .onAppear {
             alertController.refreshAuthorizationState()
             if settings.autoContinueEnabled {
-                for provider in ProviderID.allCases
+                for provider in settings.providerDisplayOrder.providers
                 where settings.autoContinueEnabled(for: provider) {
                     autoContinueController.scanTargets(for: provider)
                 }
