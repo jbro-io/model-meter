@@ -14,6 +14,9 @@ let package = Package(
         .executableTarget(
             name: "ModelMeter",
             path: "Sources/ModelMeter",
+            resources: [
+                .copy("Resources/Brand")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]

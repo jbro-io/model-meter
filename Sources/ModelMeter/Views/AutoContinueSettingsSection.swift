@@ -112,8 +112,11 @@ struct AutoContinueSettingsSection: View {
     private func providerCard(_ provider: ProviderID) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(provider.displayName, systemImage: provider.systemImage)
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    ProviderBrandIcon(provider: provider, size: 22)
+                    Text(provider.displayName)
+                }
+                .font(.headline)
                 Spacer()
                 Toggle(
                     "Auto-continue \(provider.displayName)",

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ResponsiveProviderCards: View {
+    static let compactSpacing: CGFloat = 6
+
     @ObservedObject var store: UsageStore
     @ObservedObject var settings: AppSettings
     var expandedActivity = false
@@ -10,10 +12,14 @@ struct ResponsiveProviderCards: View {
         glassProviderCards
     }
 
+    private var cardSpacing: CGFloat {
+        expandedActivity ? 12 : Self.compactSpacing
+    }
+
     @ViewBuilder
     private var glassProviderCards: some View {
         if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 12) {
+            GlassEffectContainer(spacing: cardSpacing) {
                 responsiveProviderCards
             }
         } else {
@@ -23,14 +29,14 @@ struct ResponsiveProviderCards: View {
 
     private var responsiveProviderCards: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: cardSpacing) {
                 ForEach(settings.providerDisplayOrder.providers) { provider in
                     providerCard(provider)
                         .frame(minWidth: 335, maxWidth: .infinity, alignment: .top)
                 }
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: cardSpacing) {
                 ForEach(settings.providerDisplayOrder.providers) { provider in
                     providerCard(provider)
                 }

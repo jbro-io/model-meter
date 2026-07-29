@@ -17,6 +17,9 @@ swift build "${SWIFT_BUILD_ARGUMENTS[@]}"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 cp "$ROOT/.build/$CONFIGURATION/ModelMeter" "$CONTENTS/MacOS/ModelMeter"
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
+ditto \
+    "$ROOT/Sources/ModelMeter/Resources/Brand" \
+    "$CONTENTS/Resources/Brand"
 
 # UserNotifications only resolves named sounds from the app container or bundle.
 # Copy macOS's installed alert sounds before signing so the picker and delivered

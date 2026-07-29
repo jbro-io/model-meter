@@ -100,14 +100,7 @@ struct AutoContinueWorkspace: View {
                     selectedProvider = provider
                 } label: {
                     HStack(spacing: 9) {
-                        Image(systemName: provider.systemImage)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(provider.tint)
-                            .frame(width: 27, height: 27)
-                            .background(
-                                provider.tint.opacity(0.1),
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
+                        ProviderBrandIcon(provider: provider, size: 27)
 
                         VStack(alignment: .leading, spacing: 0) {
                             Text(provider.displayName)
