@@ -1,15 +1,12 @@
 import SwiftUI
 
 struct AutoContinueWorkspace: View {
-    private static let sessionsPerPage = 5
-
     @ObservedObject var settings: AppSettings
     @ObservedObject var controller: AutoContinueController
     let close: @MainActor () -> Void
     let openSettings: @MainActor () -> Void
 
     @State private var selectedProvider: ProviderID = .claude
-    @State private var sessionPages: [ProviderID: Int] = [:]
 
     var body: some View {
         VStack(spacing: 11) {
@@ -240,14 +237,6 @@ struct AutoContinueWorkspace: View {
         _ sessions: [KittySessionTarget],
         provider: ProviderID
     ) -> some View {
-        let pageCount = max(
-            1,
-            Int(ceil(Double(sessions.count) / Double(Self.sessionsPerPage)))
-        )
-        let page = min(max(sessionPages[provider, default: 0], 0), pageCount - 1)
-        let start = page * Self.sessionsPerPage
-        let end = min(start + Self.sessionsPerPage, sessions.count)
-        let visibleSessions = Array(sessions[start..<end])
         let selectedCount = settings.kittySessionIDs(for: provider).count
 
         return VStack(spacing: 7) {
@@ -277,32 +266,7 @@ struct AutoContinueWorkspace: View {
                         in: Capsule()
                     )
 
-                if pageCount > 1 {
-                    HStack(spacing: 7) {
-                        Button {
-                            sessionPages[provider] = max(page - 1, 0)
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(page == 0)
-
-                        Text("\(start + 1)–\(end) of \(sessions.count)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-
-                        Button {
-                            sessionPages[provider] = min(page + 1, pageCount - 1)
-                        } label: {
-                            Image(systemName: "chevron.right")
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(page == pageCount - 1)
-                    }
-                }
-
                 Button {
-                    sessionPages[provider] = 0
                     controller.scanTargets(for: provider)
                 } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
@@ -312,18 +276,25 @@ struct AutoContinueWorkspace: View {
                 .disabled(controller.status(for: provider) == .scanning)
             }
 
-            ForEach(visibleSessions) { session in
-                AutoContinueSessionRow(
-                    session: session,
-                    provider: provider,
-                    isEnrolled: sessionEnabledBinding(
-                        session.id,
-                        provider: provider
-                    )
-                )
+            ScrollView {
+                LazyVStack(spacing: 7) {
+                    ForEach(sessions) { session in
+                        AutoContinueSessionRow(
+                            session: session,
+                            provider: provider,
+                            isEnrolled: sessionEnabledBinding(
+                                session.id,
+                                provider: provider
+                            )
+                        )
+                    }
+                }
+                .padding(.trailing, 3)
             }
-
-            Spacer(minLength: 0)
+            .scrollIndicators(.automatic)
+            .accessibilityLabel(
+                "\(provider.displayName) live sessions"
+            )
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -617,7 +588,6 @@ struct AutoContinueWorkspace: View {
     private func scanAllProviders() {
         for provider in settings.providerDisplayOrder.providers
         where controller.status(for: provider) != .scanning {
-            sessionPages[provider] = 0
             controller.scanTargets(for: provider)
         }
     }
