@@ -9,7 +9,8 @@ final class SettingsWindowController: NSWindowController {
         settings: AppSettings,
         store: UsageStore,
         alertController: UsageAlertController,
-        autoContinueController: AutoContinueController
+        autoContinueController: AutoContinueController,
+        checkForUpdates: @escaping @MainActor () -> Void = {}
     ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
@@ -31,7 +32,8 @@ final class SettingsWindowController: NSWindowController {
                 settings: settings,
                 store: store,
                 alertController: alertController,
-                autoContinueController: autoContinueController
+                autoContinueController: autoContinueController,
+                checkForUpdates: checkForUpdates
             )
         )
 

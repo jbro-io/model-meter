@@ -1,0 +1,293 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleShortVersionString" \
+              Resources/Info.plist
+          )"
+          BUILD="$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleVersion" \
+              Resources/Info.plist
+          )"
+
+          if [[ "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match app version $VERSION" >&2
+            exit 1
+          fi
+          if [[ ! "$BUILD" =~ ^[0-9]+$ ]]; then
+            echo "CFBundleVersion must be numeric; found $BUILD" >&2
+            exit 1
+          fi
+
+          LATEST_TAG="$(
+            gh release list \
+              --exclude-drafts \
+              --exclude-pre-releases \
+              --limit 1 \
+              --json tagName \
+              --jq '.[0].tagName // empty'
+          )"
+          if [[ -n "$LATEST_TAG" ]]; then
+            PREVIOUS_APPCAST="$RUNNER_TEMP/previous-appcast.xml"
+            gh release download "$LATEST_TAG" \
+              --pattern appcast.xml \
+              --output "$PREVIOUS_APPCAST"
+            PREVIOUS_BUILD="$(
+              xmllint \
+                --xpath \
+                'string((//*[local-name()="enclosure"]/@*[local-name()="version"])[1])' \
+                "$PREVIOUS_APPCAST"
+            )"
+            if [[ ! "$PREVIOUS_BUILD" =~ ^[0-9]+$ ]]; then
+              echo "Latest release $LATEST_TAG has no numeric Sparkle build." >&2
+              exit 1
+            fi
+            if (( BUILD <= PREVIOUS_BUILD )); then
+              echo "Build $BUILD must exceed $LATEST_TAG build $PREVIOUS_BUILD." >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        run: swift test
+
+      - name: Detect Apple signing configuration
+        id: apple-signing
+        env:
+          CERTIFICATE_BASE64: >-
+            ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: >-
+            ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VALUES=(
+            "$CERTIFICATE_BASE64"
+            "$CERTIFICATE_PASSWORD"
+            "$APPLE_ID"
+            "$APPLE_TEAM_ID"
+            "$APPLE_APP_PASSWORD"
+          )
+          CONFIGURED=0
+          for VALUE in "${VALUES[@]}"; do
+            if [[ -n "$VALUE" ]]; then
+              CONFIGURED=$((CONFIGURED + 1))
+            fi
+          done
+
+          if [[ "$CONFIGURED" == "0" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Publishing an ad-hoc signed release because Apple signing secrets are not configured."
+          elif [[ "$CONFIGURED" == "${#VALUES[@]}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Apple release signing is only partially configured." >&2
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.apple-signing.outputs.enabled == 'true'
+        id: certificate
+        env:
+          CERTIFICATE_BASE64: >-
+            ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: >-
+            ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/model-meter-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+          CERTIFICATE="$RUNNER_TEMP/model-meter-developer-id.p12"
+
+          printf "%s" "$CERTIFICATE_BASE64" | /usr/bin/base64 -D > "$CERTIFICATE"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERTIFICATE" \
+            -k "$KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN"
+
+          IDENTITY="$(
+            security find-identity -v -p codesigning "$KEYCHAIN" \
+              | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' \
+              | head -n 1
+          )"
+          if [[ -z "$IDENTITY" ]]; then
+            echo "No Developer ID Application identity found." >&2
+            exit 1
+          fi
+
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Build universal application
+        env:
+          APPLE_SIGNING_ENABLED: ${{ steps.apple-signing.outputs.enabled }}
+          SIGNING_IDENTITY: ${{ steps.certificate.outputs.identity }}
+          SIGNING_KEYCHAIN: ${{ steps.certificate.outputs.keychain }}
+        run: |
+          set -euo pipefail
+          if [[ "$APPLE_SIGNING_ENABLED" == "true" ]]; then
+            MODEL_METER_ARCHS="arm64 x86_64" \
+              CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+              CODE_SIGN_KEYCHAIN="$SIGNING_KEYCHAIN" \
+              ./scripts/build-app.sh
+          else
+            MODEL_METER_ARCHS="arm64 x86_64" ./scripts/build-app.sh
+          fi
+
+      - name: Verify universal application
+        run: |
+          set -euo pipefail
+          APP="dist/Model Meter.app"
+          lipo "$APP/Contents/MacOS/ModelMeter" -verify_arch arm64 x86_64
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          test -d "$APP/Contents/Frameworks/Sparkle.framework"
+          test -f "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+
+      - name: Notarize application
+        if: steps.apple-signing.outputs.enabled == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP="dist/Model Meter.app"
+          NOTARY_ARCHIVE="$RUNNER_TEMP/model-meter-notarization.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARY_ARCHIVE"
+          xcrun notarytool submit "$NOTARY_ARCHIVE" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+
+      - name: Package release
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          ARCHIVE="release/Model-Meter-$VERSION.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/Model Meter.app" \
+            "$ARCHIVE"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo "SPARKLE_PRIVATE_KEY is required to publish updates." >&2
+            exit 1
+          fi
+
+          GENERATE_APPCAST=".build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+          test -x "$GENERATE_APPCAST"
+          printf "%s" "$SPARKLE_PRIVATE_KEY" \
+            | "$GENERATE_APPCAST" \
+                --ed-key-file - \
+                --download-url-prefix \
+                  "https://github.com/jbro-io/model-meter/releases/download/$TAG/" \
+                --full-release-notes-url \
+                  "https://github.com/jbro-io/model-meter/releases/tag/$TAG" \
+                --link "https://github.com/jbro-io/model-meter" \
+                --maximum-versions 1 \
+                --maximum-deltas 0 \
+                release
+
+          xmllint --noout release/appcast.xml
+          grep -Fq "sparkle:edSignature" release/appcast.xml
+          grep -Fq "sparkle-signatures:" release/appcast.xml
+          printf "%s" "$SPARKLE_PRIVATE_KEY" \
+            | .build/artifacts/sparkle/Sparkle/bin/sign_update \
+                --verify \
+                --ed-key-file - \
+                release/appcast.xml
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            if [[ "$IS_DRAFT" != "true" ]]; then
+              echo "Release $TAG is already published." >&2
+              exit 1
+            fi
+          else
+            gh release create "$TAG" \
+              --draft \
+              --verify-tag \
+              --title "Model Meter $VERSION" \
+              --generate-notes
+          fi
+
+          gh release upload "$TAG" \
+            "$ARCHIVE" \
+            release/appcast.xml \
+            --clobber
+          gh release edit "$TAG" --draft=false --latest
+
+      - name: Clean up signing keychain
+        if: always() && steps.apple-signing.outputs.enabled == 'true'
+        env:
+          SIGNING_KEYCHAIN: ${{ steps.certificate.outputs.keychain }}
+        run: |
+          if [[ -n "$SIGNING_KEYCHAIN" ]]; then
+            security delete-keychain "$SIGNING_KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/model-meter-developer-id.p12"

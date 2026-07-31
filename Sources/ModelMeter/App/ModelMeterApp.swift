@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sparkle
 import SwiftUI
 
 @MainActor
@@ -10,8 +11,19 @@ private final class AppServices {
     let store: UsageStore
     let alertController: UsageAlertController
     let autoContinueController: AutoContinueController
+    let updaterController: SPUStandardUpdaterController?
 
     private init() {
+        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true,
+                updaterDelegate: nil,
+                userDriverDelegate: nil
+            )
+        } else {
+            updaterController = nil
+        }
+
         let settings = AppSettings()
         self.settings = settings
         let store = UsageStore(settings: settings)
@@ -33,7 +45,10 @@ struct ModelMeterApp: App {
                 settings: services.settings,
                 store: services.store,
                 alertController: services.alertController,
-                autoContinueController: services.autoContinueController
+                autoContinueController: services.autoContinueController,
+                checkForUpdates: { [services] in
+                    services.updaterController?.checkForUpdates(nil)
+                }
             )
         }
     }
@@ -132,7 +147,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 settings: services.settings,
                 store: services.store,
                 alertController: services.alertController,
-                autoContinueController: services.autoContinueController
+                autoContinueController: services.autoContinueController,
+                checkForUpdates: { [services] in
+                    services.updaterController?.checkForUpdates(nil)
+                }
             )
         }
         settingsWindowController?.present()

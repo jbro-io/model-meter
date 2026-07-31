@@ -17,6 +17,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Native Liquid Glass cards and controls on macOS 26, with a material fallback on earlier supported releases
 - Configurable native macOS alerts at one or more remaining-quota thresholds, with optional sound
 - Session-aware Auto-Continue for Kitty: resume selected Claude or Codex tabs when an exhausted 5-hour window recovers
+- Signed in-app updates from GitHub Releases, including a manual Check for Updates action
 - Automatic refresh (1–30 minutes), manual refresh, and configurable CLI paths
 
 The menu-bar item identifies the provider and quota window currently under the most pressure, using the selected Used or Remaining mode.
@@ -24,12 +25,19 @@ The menu-bar item identifies the provider and quota window currently under the m
 ## Requirements
 
 - macOS 14 or newer
-- Swift 6 / Xcode 16 or newer to build
 - Claude Code and/or Codex CLI already installed and authenticated
 
 Model Meter auto-detects common Apple Silicon and Intel Homebrew paths plus `~/.local/bin` and `PATH`. Finder-launched apps do not receive your full shell environment, so explicit paths can be set under Settings.
 
+## Install
+
+Download the universal app archive from the [latest GitHub Release](https://github.com/jbro-io/model-meter/releases/latest), extract it, and move **Model Meter.app** to Applications. No Swift toolchain or local build is required.
+
+Model Meter checks the signed GitHub release feed with Sparkle. You can also choose **Check for Updates…** under Settings. Update archives and the feed are signed with the project’s Ed25519 release key before publication.
+
 ## Build and run
+
+Source builds require Swift 6 / Xcode 16 or newer.
 
 ```sh
 make test
@@ -51,6 +59,36 @@ open "/Applications/Model Meter.app"
 ```
 
 The app is ad-hoc signed for local use. Open the Swift package in Xcode if you prefer to run and debug it there.
+
+## CI and releases
+
+Every push to `master` and every pull request runs the test suite, builds the app bundle, verifies the embedded Sparkle framework, and validates the complete code signature. Pull-request jobs do not receive release secrets.
+
+A tag such as `v0.11.0` triggers the release workflow. The tag must match `CFBundleShortVersionString` in `Resources/Info.plist`, and `CFBundleVersion` must be incremented. The workflow:
+
+1. Tests and builds a universal Apple Silicon/Intel app.
+2. Developer ID signs and notarizes it when all Apple credentials are configured; otherwise it creates an ad-hoc signed build.
+3. Packages the app without breaking framework symlinks.
+4. Signs the archive and appcast with Sparkle’s Ed25519 key.
+5. Publishes both assets in a GitHub Release, making the appcast available to installed copies.
+
+`SPARKLE_PRIVATE_KEY` is the only required release secret. Keep the same private key in 1Password for authorized maintainers and set it as a GitHub Actions repository secret. Do not commit it or distribute it to contributors who do not publish releases. To import a 1Password copy on another development Mac:
+
+```sh
+.build/artifacts/sparkle/Sparkle/bin/generate_keys \
+  --account io.jbro.modelmeter \
+  -f /secure/path/to/model-meter-sparkle-private-key
+```
+
+For notarized releases, configure all five optional repository secrets:
+
+- `DEVELOPER_ID_APPLICATION_CERTIFICATE_BASE64`
+- `DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+If any Apple signing secret is present, the workflow requires the complete set rather than publishing a partially signed release. Restrict tag creation and release-secret access to maintainers.
 
 ## How the integrations work
 
@@ -108,4 +146,4 @@ Auto-Continue uses Kitty's configured local Unix socket. It does not use Accessi
 
 ## Project layout
 
-The project is a dependency-free Swift package. An AppKit status item and SwiftUI dashboard provide the native menu-bar experience; provider adapters feed a shared snapshot model; parser tests use redacted fixtures and never contact either provider.
+The project is a native Swift package with Sparkle as its sole runtime dependency. An AppKit status item and SwiftUI dashboard provide the native menu-bar experience; provider adapters feed a shared snapshot model; parser tests use redacted fixtures and never contact either provider.

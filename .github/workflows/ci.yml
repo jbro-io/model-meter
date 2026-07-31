@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build application bundle
+        run: ./scripts/build-app.sh
+
+      - name: Verify application bundle
+        run: |
+          set -euo pipefail
+          APP="dist/Model Meter.app"
+          plutil -lint "$APP/Contents/Info.plist"
+          test -d "$APP/Contents/Frameworks/Sparkle.framework"
+          test -f "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+          otool -L "$APP/Contents/MacOS/ModelMeter" \
+            | grep -Fq "@rpath/Sparkle.framework"
+          codesign --verify --deep --strict --verbose=2 "$APP"

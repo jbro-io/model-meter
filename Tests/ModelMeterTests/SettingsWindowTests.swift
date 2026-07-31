@@ -24,11 +24,15 @@ final class SettingsWindowTests: XCTestCase {
             store: store,
             defaults: defaults
         )
+        let updateCheckRecorder = UpdateCheckRecorder()
         let controller = SettingsWindowController(
             settings: settings,
             store: store,
             alertController: alertController,
-            autoContinueController: autoContinueController
+            autoContinueController: autoContinueController,
+            checkForUpdates: {
+                updateCheckRecorder.callCount += 1
+            }
         )
         let window = try XCTUnwrap(controller.window)
 
@@ -53,11 +57,18 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertTrue(
             hostingController.rootView.autoContinueController === autoContinueController
         )
+        hostingController.rootView.checkForUpdates()
+        XCTAssertEqual(updateCheckRecorder.callCount, 1)
 
         let originalWindow = window
         controller.close()
         XCTAssertTrue(controller.window === originalWindow)
     }
+}
+
+@MainActor
+private final class UpdateCheckRecorder {
+    var callCount = 0
 }
 
 @MainActor

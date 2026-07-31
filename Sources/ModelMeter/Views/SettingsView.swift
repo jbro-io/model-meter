@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject var store: UsageStore
     @ObservedObject var alertController: UsageAlertController
     @ObservedObject var autoContinueController: AutoContinueController
+    let checkForUpdates: @MainActor () -> Void
     @State private var soundImportError: String?
 
     var body: some View {
@@ -69,6 +70,30 @@ struct SettingsView: View {
                     .modelMeterGlassButton()
                     .controlSize(.small)
                     .disabled(store.isRefreshing)
+                }
+
+                Section("Updates") {
+                    LabeledContent("Installed version") {
+                        Text(installedVersion)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        checkForUpdates()
+                    } label: {
+                        Label(
+                            "Check for Updates…",
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
+                    }
+                    .modelMeterGlassButton()
+                    .controlSize(.small)
+
+                    Text("Model Meter can check GitHub Releases and securely install signed updates without downloading or rebuilding the project.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 AutoContinueSettingsSection(
@@ -260,6 +285,23 @@ struct SettingsView: View {
         AppSettings.allowedAlertThresholdPercents.filter {
             !settings.usageAlertThresholdPercents.contains($0)
         }
+    }
+
+    private var installedVersion: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String
+
+        guard let version, !version.isEmpty else {
+            return "Development build"
+        }
+        guard let build, !build.isEmpty else {
+            return version
+        }
+        return "\(version) (\(build))"
     }
 
     private func selectableThresholds(replacing current: Int) -> [Int] {
