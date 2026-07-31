@@ -16,7 +16,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Floating glass dashboards in either combined mode or independent Claude and Codex windows
 - Native Liquid Glass cards and controls on macOS 26, with a material fallback on earlier supported releases
 - Configurable native macOS alerts at one or more remaining-quota thresholds, with optional sound
-- Session-aware Auto-Continue for Kitty: resume selected Claude or Codex tabs when an exhausted 5-hour window recovers
+- Session-aware Auto-Continue for Kitty, iTerm2, and Ghostty: resume enrolled Claude or Codex sessions when an exhausted 5-hour window recovers
 - Signed in-app updates from GitHub Releases, including a manual Check for Updates action
 - Automatic refresh (1–30 minutes), manual refresh, and configurable CLI paths
 
@@ -121,7 +121,11 @@ Codex account usage requires ChatGPT authentication. Platform API-key spend is n
 
 ### Auto-Continue
 
-Auto-Continue can type `continue` and press Return in enrolled Kitty sessions after Model Meter observes that provider's 5-hour window reach 100% and later become available again. It is off by default.
+Auto-Continue can type `continue` and press Return in enrolled terminal sessions after Model Meter observes that provider's 5-hour window reach 100% and later become available again. It is off by default. Enrollments are stored separately for each terminal and provider.
+
+Use the terminal button in Model Meter's popover to open Session Autopilot, or use the full Auto-Continue settings. Choose a terminal, scan its live sessions, and explicitly enroll the Claude or Codex sessions that should resume.
+
+#### Kitty
 
 Enable Kitty's local-socket remote control by adding this to `kitty.conf`, then restart Kitty:
 
@@ -132,9 +136,23 @@ listen_on unix:/tmp/model-meter-kitty
 
 If Kitty already has a `listen_on` address, keep it—Model Meter discovers the address from `kitty.conf` and follows Kitty's PID-suffixed socket automatically. You can also enter an explicit address in Advanced settings.
 
-Use the terminal button in Model Meter's popover to slide into the Session Autopilot workspace, or open the full Auto-Continue settings. Kitty tab titles are cleaned up and shown as session tiles. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its foreground process or title. Advanced matching accepts Kitty's native match syntax or Model Meter's `smart:<provider>` matcher.
+Kitty tab titles are cleaned up and shown as session tiles. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its foreground process or title. Advanced matching accepts Kitty's native match syntax or Model Meter's `smart:<provider>` matcher.
 
 Model Meter verifies saved window IDs against live provider-matching Kitty windows before sending. Each successful scan automatically forgets enrolled window IDs that Kitty no longer reports, so closed tabs do not remain in the enrolled count. It sends once per observed exhaustion/recovery cycle, persists an armed recovery across relaunches, wakes near the provider's reported reset time, and leaves a continuation armed if no enrolled session is available.
+
+#### iTerm2
+
+Run iTerm2, select it in Auto-Continue, and choose **Test Access & Scan**. macOS will ask whether Model Meter may automate iTerm. Grant access under **System Settings → Privacy & Security → Automation** if necessary.
+
+iTerm2 support uses its maintained-for-compatibility AppleScript interface. For safety, only explicitly enrolled sessions are supported. Model Meter uses the foreground executable while scanning, then retains only the session ID, TTY, working directory, provider, and display title needed to reject a stale or reused session ID. Full command lines are never persisted.
+
+#### Ghostty preview
+
+Ghostty 1.3 or newer is required, and its `macos-applescript` setting must remain enabled. Ghostty's AppleScript API is still preview, so Model Meter supports explicitly enrolled sessions only—never broad All Matching delivery.
+
+Because Ghostty does not expose foreground process metadata, eligible terminal titles must be exactly `Claude`, `Claude Code`, or `Codex`, or end in ` — <provider>`, ` - <provider>`, or ` | <provider>`. Model Meter rechecks the exact enrolled title, working directory, and terminal ID before sending.
+
+For iTerm2 and Ghostty, a failed or unauthorized scan never deletes enrollment state. Only a complete user-initiated scan prunes closed sessions. If delivery succeeds for only some enrolled sessions, that progress is persisted and only the unsent sessions are retried. Changing terminals or that provider's enrollments while a recovery is armed invalidates its delivery route so text cannot be sent into a newly selected terminal by accident.
 
 ## Privacy and sandboxing
 
@@ -142,7 +160,7 @@ Model Meter never reads or logs provider credentials. It passes requests to the 
 
 Claude's fallback session-registry check reads only status timestamps. Its stats integration reads only Claude Code's aggregate stats cache. Model Meter never opens Claude or Codex transcript content.
 
-Auto-Continue uses Kitty's configured local Unix socket. It does not use Accessibility permissions, scrape terminal contents, or activate a terminal window.
+Auto-Continue uses Kitty's configured local Unix socket or in-process macOS Apple Events for iTerm2 and Ghostty. It does not use Accessibility permissions, scrape terminal contents, or activate a terminal window. Apple Events access is requested only from an explicit terminal scan or delivery, and the app checks that the terminal is already running so a scan cannot launch it.
 
 ## Project layout
 

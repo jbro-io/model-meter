@@ -100,15 +100,31 @@ enum UsageAlertSound: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum AutoContinueTerminal: String, CaseIterable, Identifiable, Sendable {
+enum AutoContinueTerminal: String, CaseIterable, Codable, Identifiable, Sendable {
     case kitty
+    case iterm
+    case ghostty
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .kitty: "Kitty"
+        case .iterm: "iTerm2"
+        case .ghostty: "Ghostty"
         }
+    }
+
+    var supportsAllSessions: Bool {
+        self == .kitty
+    }
+
+    var usesAppleEvents: Bool {
+        self != .kitty
+    }
+
+    var isPreview: Bool {
+        self == .ghostty
     }
 }
 
@@ -129,6 +145,9 @@ final class AppSettings: ObservableObject {
         static let autoContinueClaudeEnabled = "autoContinueClaudeEnabled"
         static let autoContinueCodexEnabled = "autoContinueCodexEnabled"
         static let autoContinueTerminal = "autoContinueTerminal"
+        static let autoContinueRouteRevision = "autoContinueRouteRevision"
+        static let autoContinueRouteRevisions = "autoContinueRouteRevisions.v2"
+        static let terminalEnrollmentSnapshots = "terminalEnrollmentSnapshots.v2"
         static let kittyExecutablePath = "kittyExecutablePath"
         static let kittyListenAddress = "kittyListenAddress"
         static let kittyClaudeMatch = "kittyClaudeMatch"
@@ -198,52 +217,121 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var autoContinueEnabled: Bool {
-        didSet { defaults.set(autoContinueEnabled, forKey: Key.autoContinueEnabled) }
+        didSet {
+            defaults.set(autoContinueEnabled, forKey: Key.autoContinueEnabled)
+            if autoContinueEnabled != oldValue {
+                bumpAutoContinueRouteRevisions()
+            }
+        }
     }
 
     @Published var autoContinueClaudeEnabled: Bool {
         didSet {
             defaults.set(autoContinueClaudeEnabled, forKey: Key.autoContinueClaudeEnabled)
+            if autoContinueClaudeEnabled != oldValue {
+                bumpAutoContinueRouteRevision(for: .claude)
+            }
         }
     }
 
     @Published var autoContinueCodexEnabled: Bool {
         didSet {
             defaults.set(autoContinueCodexEnabled, forKey: Key.autoContinueCodexEnabled)
+            if autoContinueCodexEnabled != oldValue {
+                bumpAutoContinueRouteRevision(for: .codex)
+            }
         }
     }
 
     @Published var autoContinueTerminal: AutoContinueTerminal {
         didSet {
             defaults.set(autoContinueTerminal.rawValue, forKey: Key.autoContinueTerminal)
+            if autoContinueTerminal != oldValue {
+                bumpAutoContinueRouteRevisions()
+            }
         }
     }
 
     @Published var kittyExecutablePath: String {
-        didSet { defaults.set(kittyExecutablePath, forKey: Key.kittyExecutablePath) }
+        didSet {
+            defaults.set(kittyExecutablePath, forKey: Key.kittyExecutablePath)
+            if kittyExecutablePath != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevisions()
+            }
+        }
     }
 
     @Published var kittyListenAddress: String {
-        didSet { defaults.set(kittyListenAddress, forKey: Key.kittyListenAddress) }
+        didSet {
+            defaults.set(kittyListenAddress, forKey: Key.kittyListenAddress)
+            if kittyListenAddress != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevisions()
+            }
+        }
     }
 
     @Published var kittyClaudeMatch: String {
-        didSet { defaults.set(kittyClaudeMatch, forKey: Key.kittyClaudeMatch) }
+        didSet {
+            defaults.set(kittyClaudeMatch, forKey: Key.kittyClaudeMatch)
+            if kittyClaudeMatch != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevision(for: .claude)
+            }
+        }
     }
 
     @Published var kittyCodexMatch: String {
-        didSet { defaults.set(kittyCodexMatch, forKey: Key.kittyCodexMatch) }
+        didSet {
+            defaults.set(kittyCodexMatch, forKey: Key.kittyCodexMatch)
+            if kittyCodexMatch != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevision(for: .codex)
+            }
+        }
     }
 
     @Published var kittyClaudeAllSessions: Bool {
         didSet {
             defaults.set(kittyClaudeAllSessions, forKey: Key.kittyClaudeAllSessions)
+            if kittyClaudeAllSessions != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevision(for: .claude)
+            }
         }
     }
 
     @Published var kittyCodexAllSessions: Bool {
         didSet {
             defaults.set(kittyCodexAllSessions, forKey: Key.kittyCodexAllSessions)
+            if kittyCodexAllSessions != oldValue,
+               autoContinueTerminal == .kitty {
+                bumpAutoContinueRouteRevision(for: .codex)
+            }
+        }
+    }
+
+    @Published private(set) var autoContinueRouteRevisions: [ProviderID: Int] {
+        didSet {
+            defaults.set(
+                Dictionary(
+                    uniqueKeysWithValues: autoContinueRouteRevisions.map {
+                        ($0.key.rawValue, $0.value)
+                    }
+                ),
+                forKey: Key.autoContinueRouteRevisions
+            )
+        }
+    }
+
+    @Published private(set) var terminalEnrollmentSnapshots: [
+        String: [TerminalSessionTarget]
+    ] {
+        didSet {
+            if let data = try? JSONEncoder().encode(terminalEnrollmentSnapshots) {
+                defaults.set(data, forKey: Key.terminalEnrollmentSnapshots)
+            }
         }
     }
 
@@ -308,6 +396,30 @@ final class AppSettings: ObservableObject {
         ) as? Bool ?? true
         autoContinueTerminal = defaults.string(forKey: Key.autoContinueTerminal)
             .flatMap(AutoContinueTerminal.init(rawValue:)) ?? .kitty
+        let legacyRouteRevision = defaults.integer(
+            forKey: Key.autoContinueRouteRevision
+        )
+        let storedRouteRevisions = defaults.dictionary(
+            forKey: Key.autoContinueRouteRevisions
+        ) ?? [:]
+        autoContinueRouteRevisions = Dictionary(
+            uniqueKeysWithValues: ProviderID.allCases.map { provider in
+                (
+                    provider,
+                    (storedRouteRevisions[provider.rawValue] as? NSNumber)?.intValue
+                        ?? legacyRouteRevision
+                )
+            }
+        )
+        terminalEnrollmentSnapshots = defaults.data(
+            forKey: Key.terminalEnrollmentSnapshots
+        )
+        .flatMap {
+            try? JSONDecoder().decode(
+                [String: [TerminalSessionTarget]].self,
+                from: $0
+            )
+        } ?? [:]
         kittyExecutablePath = defaults.string(forKey: Key.kittyExecutablePath) ?? ""
         kittyListenAddress = defaults.string(forKey: Key.kittyListenAddress)
             ?? "unix:/tmp/model-meter-kitty"
@@ -363,7 +475,13 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func autoContinueRouteRevision(for provider: ProviderID) -> Int {
+        autoContinueRouteRevisions[provider] ?? 0
+    }
+
     func setKittySession(_ id: Int, enabled: Bool, for provider: ProviderID) {
+        let existing = kittySessionIDs(for: provider).contains(id)
+        guard existing != enabled else { return }
         switch provider {
         case .claude:
             if enabled {
@@ -378,18 +496,244 @@ final class AppSettings: ObservableObject {
                 kittyCodexSessionIDs.remove(id)
             }
         }
+        if !enabled {
+            removeEnrollmentSnapshot(
+                id: String(id),
+                terminal: .kitty,
+                provider: provider
+            )
+        }
+        if autoContinueTerminal == .kitty {
+            bumpAutoContinueRouteRevision(for: provider)
+        }
     }
 
     func retainKittySessions(
         withIDs liveIDs: Set<Int>,
         for provider: ProviderID
     ) {
+        let previous = kittySessionIDs(for: provider)
         switch provider {
         case .claude:
             kittyClaudeSessionIDs.formIntersection(liveIDs)
         case .codex:
             kittyCodexSessionIDs.formIntersection(liveIDs)
         }
+        guard previous != kittySessionIDs(for: provider) else { return }
+        let liveStringIDs = Set(liveIDs.map(String.init))
+        updateEnrollmentSnapshots(
+            terminal: .kitty,
+            provider: provider
+        ) {
+            $0.filter { liveStringIDs.contains($0.id) }
+        }
+        if autoContinueTerminal == .kitty {
+            bumpAutoContinueRouteRevision(for: provider)
+        }
+    }
+
+    func allSessions(
+        for terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) -> Bool {
+        terminal == .kitty && kittyAllSessions(for: provider)
+    }
+
+    func selectedSessionIDs(
+        for terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) -> Set<String> {
+        if terminal == .kitty {
+            return Set(kittySessionIDs(for: provider).map(String.init))
+        }
+        return Set(
+            enrollmentSnapshots(for: terminal, provider: provider).map(\.id)
+        )
+    }
+
+    func selectedSessionTargets(
+        for terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) -> [TerminalSessionTarget] {
+        let snapshots = enrollmentSnapshots(for: terminal, provider: provider)
+        guard terminal == .kitty else { return snapshots }
+        let snapshotsByID = Dictionary(
+            uniqueKeysWithValues: snapshots.map { ($0.id, $0) }
+        )
+        return kittySessionIDs(for: provider)
+            .sorted()
+            .map {
+                snapshotsByID[String($0)]
+                    ?? .legacyKitty(id: $0, provider: provider)
+            }
+    }
+
+    func hasIncompleteSessionIdentity(
+        for terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) -> Bool {
+        selectedSessionTargets(for: terminal, provider: provider)
+            .contains { !$0.hasIdentitySnapshot }
+    }
+
+    func setTerminalSession(
+        _ target: TerminalSessionTarget,
+        enabled: Bool
+    ) {
+        let selected = selectedSessionIDs(
+            for: target.terminal,
+            provider: target.provider
+        ).contains(target.id)
+        guard selected != enabled else { return }
+
+        if target.terminal == .kitty, let id = Int(target.id) {
+            switch target.provider {
+            case .claude:
+                if enabled {
+                    kittyClaudeSessionIDs.insert(id)
+                } else {
+                    kittyClaudeSessionIDs.remove(id)
+                }
+            case .codex:
+                if enabled {
+                    kittyCodexSessionIDs.insert(id)
+                } else {
+                    kittyCodexSessionIDs.remove(id)
+                }
+            }
+        }
+
+        updateEnrollmentSnapshots(
+            terminal: target.terminal,
+            provider: target.provider
+        ) { snapshots in
+            var snapshots = snapshots.filter { $0.id != target.id }
+            if enabled {
+                snapshots.append(target)
+            }
+            return snapshots.sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+        }
+        if autoContinueTerminal == target.terminal {
+            bumpAutoContinueRouteRevision(for: target.provider)
+        }
+    }
+
+    func synchronizeEnrolledSessions(
+        with liveTargets: [TerminalSessionTarget],
+        terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) {
+        let previousTargets = selectedSessionTargets(
+            for: terminal,
+            provider: provider
+        )
+        let previousByID = Dictionary(
+            uniqueKeysWithValues: previousTargets.map { ($0.id, $0) }
+        )
+        let selectedIDs = selectedSessionIDs(for: terminal, provider: provider)
+        let liveByID = Dictionary(uniqueKeysWithValues: liveTargets.map { ($0.id, $0) })
+        let retained = selectedIDs.compactMap { id -> TerminalSessionTarget? in
+            guard let live = liveByID[id],
+                  let previous = previousByID[id]
+            else {
+                return nil
+            }
+            return !previous.hasIdentitySnapshot
+                || previous.identifiesSameLiveSession(as: live)
+                ? live
+                : nil
+        }
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+
+        let storedSnapshotsChanged = enrollmentSnapshots(
+            for: terminal,
+            provider: provider
+        ) != retained
+        var persistenceChanged = storedSnapshotsChanged
+        if terminal == .kitty {
+            let retainedIDs = Set(retained.compactMap { Int($0.id) })
+            if retainedIDs != kittySessionIDs(for: provider) {
+                persistenceChanged = true
+                switch provider {
+                case .claude: kittyClaudeSessionIDs = retainedIDs
+                case .codex: kittyCodexSessionIDs = retainedIDs
+                }
+            }
+        }
+        guard persistenceChanged else { return }
+        if storedSnapshotsChanged {
+            updateEnrollmentSnapshots(
+                terminal: terminal,
+                provider: provider
+            ) { _ in retained }
+        }
+
+        let retainedByID = Dictionary(
+            uniqueKeysWithValues: retained.map { ($0.id, $0) }
+        )
+        let routeChanged = Set(previousByID.keys) != Set(retainedByID.keys)
+            || previousByID.contains { id, previous in
+                guard let live = retainedByID[id] else { return true }
+                return !previous.hasIdentitySnapshot
+                    || !previous.identifiesSameLiveSession(as: live)
+            }
+        if routeChanged, autoContinueTerminal == terminal {
+            bumpAutoContinueRouteRevision(for: provider)
+        }
+    }
+
+    private func enrollmentSnapshots(
+        for terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) -> [TerminalSessionTarget] {
+        terminalEnrollmentSnapshots[enrollmentKey(terminal, provider)] ?? []
+    }
+
+    private func updateEnrollmentSnapshots(
+        terminal: AutoContinueTerminal,
+        provider: ProviderID,
+        transform: ([TerminalSessionTarget]) -> [TerminalSessionTarget]
+    ) {
+        let key = enrollmentKey(terminal, provider)
+        var snapshots = terminalEnrollmentSnapshots
+        let updated = transform(snapshots[key] ?? [])
+        if updated.isEmpty {
+            snapshots.removeValue(forKey: key)
+        } else {
+            snapshots[key] = updated
+        }
+        terminalEnrollmentSnapshots = snapshots
+    }
+
+    private func removeEnrollmentSnapshot(
+        id: String,
+        terminal: AutoContinueTerminal,
+        provider: ProviderID
+    ) {
+        updateEnrollmentSnapshots(terminal: terminal, provider: provider) {
+            $0.filter { $0.id != id }
+        }
+    }
+
+    private func enrollmentKey(
+        _ terminal: AutoContinueTerminal,
+        _ provider: ProviderID
+    ) -> String {
+        "\(terminal.rawValue).\(provider.rawValue)"
+    }
+
+    private func bumpAutoContinueRouteRevision(for provider: ProviderID) {
+        var revisions = autoContinueRouteRevisions
+        revisions[provider, default: 0] &+= 1
+        autoContinueRouteRevisions = revisions
+    }
+
+    private func bumpAutoContinueRouteRevisions() {
+        var revisions = autoContinueRouteRevisions
+        for provider in ProviderID.allCases {
+            revisions[provider, default: 0] &+= 1
+        }
+        autoContinueRouteRevisions = revisions
     }
 
     func addUsageAlertThreshold(_ percent: Int) {

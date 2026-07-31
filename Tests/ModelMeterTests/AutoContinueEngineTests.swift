@@ -105,6 +105,58 @@ final class AutoContinueEngineTests: XCTestCase {
         XCTAssertEqual(restored, engine)
     }
 
+    func testRecoveryEventKeepsTheRouteRevisionThatWasArmed() throws {
+        var engine = AutoContinueEngine()
+
+        XCTAssertNil(
+            engine.evaluate(
+                snapshot: snapshot(usedFraction: 1),
+                enabled: true,
+                routeRevision: 7
+            )
+        )
+        XCTAssertEqual(engine.pendingRouteRevision(for: .claude), 7)
+
+        let event = try XCTUnwrap(
+            engine.evaluate(
+                snapshot: snapshot(usedFraction: 0),
+                enabled: true,
+                routeRevision: 9
+            )
+        )
+        XCTAssertEqual(event.routeRevision, 7)
+    }
+
+    func testPartialDeliveryProgressPersistsUntilRecoveryCompletes() throws {
+        var engine = AutoContinueEngine()
+        _ = engine.evaluate(
+            snapshot: snapshot(usedFraction: 1),
+            enabled: true,
+            routeRevision: 7
+        )
+
+        engine.markDeliveryProgress(
+            for: .claude,
+            routeRevision: 7,
+            targetIDs: ["already-sent"]
+        )
+
+        let data = try JSONEncoder().encode(engine)
+        var restored = try JSONDecoder().decode(
+            AutoContinueEngine.self,
+            from: data
+        )
+        XCTAssertEqual(
+            restored.deliveredTargetIDs(for: .claude),
+            ["already-sent"]
+        )
+
+        restored.markDeliverySucceeded(for: .claude, routeRevision: 6)
+        XCTAssertTrue(restored.isAwaitingRecovery(for: .claude))
+        restored.markDeliverySucceeded(for: .claude, routeRevision: 7)
+        XCTAssertFalse(restored.isAwaitingRecovery(for: .claude))
+    }
+
     private func snapshot(
         provider: ProviderID = .claude,
         usedFraction: Double,

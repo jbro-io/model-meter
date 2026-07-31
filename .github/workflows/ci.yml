@@ -42,4 +42,6 @@ jobs:
           test -f "$APP/Contents/Resources/Sparkle-LICENSE.txt"
           otool -L "$APP/Contents/MacOS/ModelMeter" \
             | grep -Fq "@rpath/Sparkle.framework"
+          codesign -d --entitlements :- "$APP" 2>&1 \
+            | grep -Fq "com.apple.security.automation.apple-events"
           codesign --verify --deep --strict --verbose=2 "$APP"

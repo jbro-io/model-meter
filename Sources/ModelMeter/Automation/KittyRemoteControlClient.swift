@@ -78,6 +78,8 @@ enum KittyRemoteControlError: LocalizedError, Equatable {
     case malformedWindowList
     case noMatchingWindows(String)
     case noSelectedSessions
+    case selectedSessionsChanged
+    case deliveryCancelled
 
     var errorDescription: String? {
         switch self {
@@ -95,6 +97,10 @@ enum KittyRemoteControlError: LocalizedError, Equatable {
             "No open Kitty windows matched “\(match)”. The continuation is still armed."
         case .noSelectedSessions:
             "No enrolled Kitty sessions are currently open. Scan targets and enable at least one session, or choose All sessions."
+        case .selectedSessionsChanged:
+            "An enrolled Kitty session changed while delivery was being validated. Scan targets before sending."
+        case .deliveryCancelled:
+            "Kitty targets changed before delivery. No text was sent."
         }
     }
 }
@@ -138,7 +144,8 @@ struct KittyRemoteControlClient: @unchecked Sendable {
         configuredPath: String,
         listenAddress: String,
         match: String,
-        selectedWindowIDs: Set<Int>?
+        selectedWindowIDs: Set<Int>?,
+        beforeSend: @escaping @Sendable () async -> Bool = { true }
     ) async throws -> KittyTargetSummary {
         let executable = try resolveExecutable(configuredPath: configuredPath)
         let address = try resolveListenAddress(configuredAddress: listenAddress)
@@ -159,6 +166,9 @@ struct KittyRemoteControlClient: @unchecked Sendable {
             guard !targets.isEmpty else {
                 throw KittyRemoteControlError.noSelectedSessions
             }
+            guard Set(targets.map(\.id)) == selectedWindowIDs else {
+                throw KittyRemoteControlError.selectedSessionsChanged
+            }
         } else {
             targets = matching.targets
         }
@@ -166,6 +176,9 @@ struct KittyRemoteControlClient: @unchecked Sendable {
         let exactMatch = targets
             .map { "id:\($0.id)" }
             .joined(separator: " or ")
+        guard await beforeSend() else {
+            throw KittyRemoteControlError.deliveryCancelled
+        }
         let output = try await runner.run(
             executable: executable,
             arguments: [

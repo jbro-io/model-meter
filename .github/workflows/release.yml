@@ -185,6 +185,8 @@ jobs:
           APP="dist/Model Meter.app"
           lipo "$APP/Contents/MacOS/ModelMeter" -verify_arch arm64 x86_64
           codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements :- "$APP" 2>&1 \
+            | grep -Fq "com.apple.security.automation.apple-events"
           test -d "$APP/Contents/Frameworks/Sparkle.framework"
           test -f "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 

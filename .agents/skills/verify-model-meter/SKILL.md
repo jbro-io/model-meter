@@ -44,10 +44,11 @@ plutil -lint "$APP/Contents/Info.plist"
 test -d "$APP/Contents/Frameworks/Sparkle.framework"
 test -f "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 otool -L "$APP/Contents/MacOS/ModelMeter"
+codesign -d --entitlements :- "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 ```
 
-Require the executable to load Sparkle through `@rpath`, and require `@executable_path/../Frameworks` in its load commands. For a release build, also run:
+Require the executable to load Sparkle through `@rpath`, require `@executable_path/../Frameworks` in its load commands, and require the app entitlement output to contain `com.apple.security.automation.apple-events` so iTerm2 and Ghostty automation survives hardened-runtime signing. For a release build, also run:
 
 ```sh
 lipo "$APP/Contents/MacOS/ModelMeter" -verify_arch arm64 x86_64

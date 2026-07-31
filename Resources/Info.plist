@@ -28,6 +28,8 @@
     <string>Copyright © 2026</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Model Meter identifies enrolled terminal sessions and sends “continue” only after an observed quota recovery or an explicit Send Now action.</string>
     <key>SUFeedURL</key>
     <string>https://github.com/jbro-io/model-meter/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>

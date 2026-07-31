@@ -35,7 +35,12 @@ struct AutoContinueSettingsSection: View {
                     Spacer()
                     Picker("Terminal", selection: $settings.autoContinueTerminal) {
                         ForEach(AutoContinueTerminal.allCases) { terminal in
-                            Text(terminal.title).tag(terminal)
+                            Text(
+                                terminal.isPreview
+                                    ? "\(terminal.title) (Preview)"
+                                    : terminal.title
+                            )
+                            .tag(terminal)
                         }
                     }
                     .labelsHidden()
@@ -46,61 +51,68 @@ struct AutoContinueSettingsSection: View {
                     providerCard(provider)
                 }
 
-                DisclosureGroup("Kitty connection & advanced targeting", isExpanded: $showAdvancedSetup) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        LabeledContent("Listen address") {
-                            TextField(
-                                "unix:/tmp/model-meter-kitty",
-                                text: $settings.kittyListenAddress
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 330)
-                        }
-
-                        LabeledContent("Kitty executable") {
-                            HStack(spacing: 8) {
+                if settings.autoContinueTerminal == .kitty {
+                    DisclosureGroup(
+                        "Kitty connection & advanced targeting",
+                        isExpanded: $showAdvancedSetup
+                    ) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            LabeledContent("Listen address") {
                                 TextField(
-                                    "Auto-detect /Applications/kitty.app",
-                                    text: $settings.kittyExecutablePath
-                                )
-                                .textFieldStyle(.roundedBorder)
-
-                                Button("Choose…") {
-                                    chooseKittyExecutable()
-                                }
-                                .controlSize(.small)
-                            }
-                            .frame(maxWidth: 430)
-                        }
-
-                        ForEach(settings.providerDisplayOrder.providers) { provider in
-                            LabeledContent("\(provider.displayName) match") {
-                                TextField(
-                                    "smart:\(provider.rawValue)",
-                                    text: kittyMatchBinding(for: provider)
+                                    "unix:/tmp/model-meter-kitty",
+                                    text: $settings.kittyListenAddress
                                 )
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: 330)
                             }
-                        }
 
-                        HStack {
-                            Button {
-                                copyKittyConfiguration()
-                            } label: {
-                                Label("Copy Kitty setup", systemImage: "doc.on.doc")
+                            LabeledContent("Kitty executable") {
+                                HStack(spacing: 8) {
+                                    TextField(
+                                        "Auto-detect /Applications/kitty.app",
+                                        text: $settings.kittyExecutablePath
+                                    )
+                                    .textFieldStyle(.roundedBorder)
+
+                                    Button("Choose…") {
+                                        chooseKittyExecutable()
+                                    }
+                                    .controlSize(.small)
+                                }
+                                .frame(maxWidth: 430)
                             }
-                            .controlSize(.small)
 
-                            Text("Requires Kitty remote control over a local socket. Active PID-suffixed sockets are auto-detected from kitty.conf.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            ForEach(settings.providerDisplayOrder.providers) { provider in
+                                LabeledContent("\(provider.displayName) match") {
+                                    TextField(
+                                        "smart:\(provider.rawValue)",
+                                        text: kittyMatchBinding(for: provider)
+                                    )
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(maxWidth: 330)
+                                }
+                            }
+
+                            HStack {
+                                Button {
+                                    copyKittyConfiguration()
+                                } label: {
+                                    Label("Copy Kitty setup", systemImage: "doc.on.doc")
+                                }
+                                .controlSize(.small)
+
+                                Text("Requires Kitty remote control over a local socket. Active PID-suffixed sockets are auto-detected from kitty.conf.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.top, 8)
                     }
-                    .padding(.top, 8)
+                } else {
+                    terminalAccessSetup
                 }
 
-                Text("Selected Sessions is the default. Session IDs are checked against live \(settings.autoContinueTerminal.title) windows matching that provider before any text is sent. Pending recovery survives a Model Meter restart.")
+                Text("Selected sessions are stored separately for each terminal and provider. Model Meter revalidates the live session identity before any text is sent. Pending recovery survives a Model Meter restart.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -127,17 +139,29 @@ struct AutoContinueSettingsSection: View {
             }
 
             if settings.autoContinueEnabled(for: provider) {
-                Picker(
-                    "Target scope",
-                    selection: allSessionsBinding(for: provider)
-                ) {
-                    Text("Selected Sessions").tag(false)
-                    Text("All Sessions").tag(true)
+                if settings.autoContinueTerminal.supportsAllSessions {
+                    Picker(
+                        "Target scope",
+                        selection: allSessionsBinding(for: provider)
+                    ) {
+                        Text("Selected Sessions").tag(false)
+                        Text("All Sessions").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                } else {
+                    Label(
+                        "Selected Sessions only",
+                        systemImage: "checkmark.shield"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
 
-                if settings.kittyAllSessions(for: provider) {
+                if settings.allSessions(
+                    for: settings.autoContinueTerminal,
+                    provider: provider
+                ) {
                     Label(
                         "Every open \(provider.displayName) session matching \(settings.kittyMatch(for: provider))",
                         systemImage: "rectangle.stack.fill"
@@ -195,13 +219,13 @@ struct AutoContinueSettingsSection: View {
             VStack(spacing: 0) {
                 ForEach(sessions) { session in
                     Toggle(
-                        isOn: sessionEnabledBinding(session.id, provider: provider)
+                        isOn: sessionEnabledBinding(session)
                     ) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Text(session.displayTitle)
                                     .lineLimit(1)
-                                Text("#\(session.id)")
+                                Text(session.shortIdentifier)
                                     .font(.caption2.monospacedDigit())
                                     .foregroundStyle(.tertiary)
                             }
@@ -313,13 +337,54 @@ struct AutoContinueSettingsSection: View {
     }
 
     private func sessionEnabledBinding(
-        _ id: Int,
-        provider: ProviderID
+        _ target: TerminalSessionTarget
     ) -> Binding<Bool> {
         Binding(
-            get: { settings.kittySessionIDs(for: provider).contains(id) },
-            set: { settings.setKittySession(id, enabled: $0, for: provider) }
+            get: {
+                settings.selectedSessionIDs(
+                    for: target.terminal,
+                    provider: target.provider
+                )
+                .contains(target.id)
+            },
+            set: { settings.setTerminalSession(target, enabled: $0) }
         )
+    }
+
+    private var terminalAccessSetup: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                settings.autoContinueTerminal == .ghostty
+                    ? "Ghostty AppleScript support is preview"
+                    : "Uses macOS Automation access",
+                systemImage: settings.autoContinueTerminal == .ghostty
+                    ? "exclamationmark.triangle"
+                    : "lock.shield"
+            )
+            .font(.caption.weight(.semibold))
+
+            Text(
+                settings.autoContinueTerminal == .ghostty
+                    ? "Requires Ghostty 1.3 or newer with AppleScript enabled. Only explicitly enrolled sessions with provider-specific titles are eligible."
+                    : "iTerm2 AppleScript is a compatibility integration. Scan explicitly to grant access and enroll sessions; Model Meter never activates the terminal."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button {
+                for provider in settings.providerDisplayOrder.providers
+                where settings.autoContinueEnabled(for: provider) {
+                    controller.scanTargets(for: provider)
+                }
+            } label: {
+                Label(
+                    "Test Access & Scan",
+                    systemImage: "checkmark.shield"
+                )
+            }
+            .controlSize(.small)
+        }
+        .padding(.vertical, 4)
     }
 
     private func targetCountText(_ count: Int) -> String {

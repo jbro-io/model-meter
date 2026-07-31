@@ -265,7 +265,8 @@ struct SettingsView: View {
         .frame(minWidth: 620, minHeight: 420)
         .onAppear {
             alertController.refreshAuthorizationState()
-            if settings.autoContinueEnabled {
+            if settings.autoContinueEnabled,
+               settings.autoContinueTerminal == .kitty {
                 for provider in settings.providerDisplayOrder.providers
                 where settings.autoContinueEnabled(for: provider) {
                     autoContinueController.scanTargets(for: provider)

@@ -21,7 +21,9 @@ struct AutoContinueWorkspace: View {
         .animation(.snappy(duration: 0.24), value: selectedProvider)
         .onAppear {
             selectedProvider = settings.providerDisplayOrder.providers.first ?? .claude
-            scanAllProviders()
+            if !settings.autoContinueTerminal.usesAppleEvents {
+                scanAllProviders()
+            }
         }
     }
 
@@ -69,6 +71,20 @@ struct AutoContinueWorkspace: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 6)
             .background(connectionColor.opacity(0.08), in: Capsule())
+
+            Picker("Terminal", selection: $settings.autoContinueTerminal) {
+                ForEach(AutoContinueTerminal.allCases) { terminal in
+                    Text(
+                        terminal.isPreview
+                            ? "\(terminal.title) Preview"
+                            : terminal.title
+                    )
+                    .tag(terminal)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 126)
 
             HStack(spacing: 8) {
                 VStack(alignment: .trailing, spacing: 0) {
@@ -164,7 +180,10 @@ struct AutoContinueWorkspace: View {
 
             if !settings.autoContinueEnabled(for: provider) {
                 disabledState(provider)
-            } else if settings.kittyAllSessions(for: provider) {
+            } else if settings.allSessions(
+                for: settings.autoContinueTerminal,
+                provider: provider
+            ) {
                 allSessionsState(provider)
             } else {
                 selectedSessionsState(provider)
@@ -207,18 +226,24 @@ struct AutoContinueWorkspace: View {
             .toggleStyle(.switch)
             .controlSize(.small)
 
-            Picker(
-                "Target scope",
-                selection: allSessionsBinding(for: provider)
-            ) {
-                Text("Selected Sessions").tag(false)
-                Text("All Matching").tag(true)
+            if settings.autoContinueTerminal.supportsAllSessions {
+                Picker(
+                    "Target scope",
+                    selection: allSessionsBinding(for: provider)
+                ) {
+                    Text("Selected Sessions").tag(false)
+                    Text("All Matching").tag(true)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: 250)
+                .disabled(!settings.autoContinueEnabled(for: provider))
+            } else {
+                Label("Selected only", systemImage: "checkmark.shield")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .frame(width: 250)
-            .disabled(!settings.autoContinueEnabled(for: provider))
         }
     }
 
@@ -234,10 +259,13 @@ struct AutoContinueWorkspace: View {
     }
 
     private func sessionList(
-        _ sessions: [KittySessionTarget],
+        _ sessions: [TerminalSessionTarget],
         provider: ProviderID
     ) -> some View {
-        let selectedCount = settings.kittySessionIDs(for: provider).count
+        let selectedCount = settings.selectedSessionIDs(
+            for: settings.autoContinueTerminal,
+            provider: provider
+        ).count
 
         return VStack(spacing: 7) {
             HStack {
@@ -282,10 +310,7 @@ struct AutoContinueWorkspace: View {
                         AutoContinueSessionRow(
                             session: session,
                             provider: provider,
-                            isEnrolled: sessionEnabledBinding(
-                                session.id,
-                                provider: provider
-                            )
+                            isEnrolled: sessionEnabledBinding(session)
                         )
                     }
                 }
@@ -400,7 +425,11 @@ struct AutoContinueWorkspace: View {
                 .foregroundStyle(.secondary)
             Text("\(provider.displayName) autopilot is off")
                 .font(.title3.weight(.semibold))
-            Text("Enable this provider above to enroll individual sessions or dynamically target every matching tab.")
+            Text(
+                settings.autoContinueTerminal.supportsAllSessions
+                    ? "Enable this provider above to enroll individual sessions or dynamically target every matching tab."
+                    : "Enable this provider above to scan and enroll explicit \(settings.autoContinueTerminal.title) sessions."
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -450,7 +479,11 @@ struct AutoContinueWorkspace: View {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundStyle(.green)
-                Text("Local Kitty socket · exact window IDs · no focus stealing")
+                Text(
+                    settings.autoContinueTerminal == .kitty
+                        ? "Local Kitty socket · live ID checks · no focus stealing"
+                        : "macOS Automation · live identity checks · no focus stealing"
+                )
             }
 
             Spacer()
@@ -478,7 +511,10 @@ struct AutoContinueWorkspace: View {
 
     private var enrolledSessionCount: Int {
         ProviderID.allCases.reduce(0) {
-            $0 + settings.kittySessionIDs(for: $1).count
+            $0 + settings.selectedSessionIDs(
+                for: settings.autoContinueTerminal,
+                provider: $1
+            ).count
         }
     }
 
@@ -494,7 +530,7 @@ struct AutoContinueWorkspace: View {
             return "Scanning tabs"
         }
         if !controller.scannedProviders.isEmpty {
-            return "Kitty linked"
+            return "\(settings.autoContinueTerminal.title) linked"
         }
         return "Ready to scan"
     }
@@ -531,14 +567,24 @@ struct AutoContinueWorkspace: View {
         if !settings.autoContinueEnabled(for: provider) {
             return "Autopilot disabled"
         }
-        if settings.kittyAllSessions(for: provider) {
+        if settings.allSessions(
+            for: settings.autoContinueTerminal,
+            provider: provider
+        ) {
             return "\(liveCount) live · all matching"
         }
-        let enrolled = settings.kittySessionIDs(for: provider).count
+        let enrolled = settings.selectedSessionIDs(
+            for: settings.autoContinueTerminal,
+            provider: provider
+        ).count
         return "\(liveCount) live · \(enrolled) enrolled"
     }
 
     private func providerSubtitle(_ provider: ProviderID) -> String {
+        let enrolledCount = settings.selectedSessionIDs(
+            for: settings.autoContinueTerminal,
+            provider: provider
+        ).count
         if controller.isArmed(for: provider) {
             if let resetAt = controller.pendingResetDate(for: provider) {
                 return "Armed for \(resetAt.formatted(date: .omitted, time: .shortened))"
@@ -547,7 +593,7 @@ struct AutoContinueWorkspace: View {
         }
         switch controller.status(for: provider) {
         case .scanning:
-            return "Reading foreground processes and cleaned Kitty tab titles…"
+            return "Reading live \(settings.autoContinueTerminal.title) session metadata…"
         case .ready(let summary):
             return summary.windowCount == 1
                 ? "1 live session found"
@@ -557,9 +603,12 @@ struct AutoContinueWorkspace: View {
         case .failed(let message):
             return message
         default:
-            return settings.kittyAllSessions(for: provider)
+            return settings.allSessions(
+                for: settings.autoContinueTerminal,
+                provider: provider
+            )
                 ? "Every matching session is eligible"
-                : "\(settings.kittySessionIDs(for: provider).count) sessions enrolled"
+                : "\(enrolledCount) sessions enrolled"
         }
     }
 
@@ -579,15 +628,16 @@ struct AutoContinueWorkspace: View {
         case .failed(let message):
             return message
         case .scanning:
-            return "Reading foreground processes and cleaned Kitty tab titles."
+            return "Reading live \(settings.autoContinueTerminal.title) session metadata."
         default:
-            return "Open \(provider.displayName) in Kitty, then scan again."
+            return "Open \(provider.displayName) in \(settings.autoContinueTerminal.title), then scan again."
         }
     }
 
     private func scanAllProviders() {
         for provider in settings.providerDisplayOrder.providers
-        where controller.status(for: provider) != .scanning {
+        where settings.autoContinueEnabled(for: provider)
+            && controller.status(for: provider) != .scanning {
             controller.scanTargets(for: provider)
         }
     }
@@ -607,18 +657,23 @@ struct AutoContinueWorkspace: View {
     }
 
     private func sessionEnabledBinding(
-        _ id: Int,
-        provider: ProviderID
+        _ target: TerminalSessionTarget
     ) -> Binding<Bool> {
         Binding(
-            get: { settings.kittySessionIDs(for: provider).contains(id) },
-            set: { settings.setKittySession(id, enabled: $0, for: provider) }
+            get: {
+                settings.selectedSessionIDs(
+                    for: target.terminal,
+                    provider: target.provider
+                )
+                .contains(target.id)
+            },
+            set: { settings.setTerminalSession(target, enabled: $0) }
         )
     }
 }
 
 private struct AutoContinueSessionRow: View {
-    let session: KittySessionTarget
+    let session: TerminalSessionTarget
     let provider: ProviderID
     @Binding var isEnrolled: Bool
 
@@ -642,7 +697,7 @@ private struct AutoContinueSessionRow: View {
                             .font(.system(size: 9, weight: .medium))
                         Text(
                             session.currentDirectory.map(abbreviatedPath)
-                                ?? "Live Kitty session"
+                                ?? "Live \(session.terminal.title) session"
                         )
                         .font(.caption.monospaced())
                         .lineLimit(1)
@@ -660,8 +715,8 @@ private struct AutoContinueSessionRow: View {
                     .padding(.vertical, 3)
                     .background(.green.opacity(0.08), in: Capsule())
 
-                Text("WINDOW #\(session.id)")
-                    .font(.caption2.monospacedDigit())
+                Text(session.shortIdentifier.uppercased())
+                    .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
                     .frame(width: 76, alignment: .trailing)
 
@@ -695,7 +750,7 @@ private struct AutoContinueSessionRow: View {
                 : "Enroll \(session.displayTitle) in Auto-Continue"
         )
         .accessibilityLabel(
-            "\(session.displayTitle), window \(session.id), "
+            "\(session.displayTitle), session \(session.id), "
                 + (isEnrolled ? "enrolled" : "not enrolled")
         )
     }

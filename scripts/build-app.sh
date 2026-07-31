@@ -75,7 +75,9 @@ if [[ "$CODE_SIGN_IDENTITY" != "-" ]]; then
     codesign "${SIGNING_ARGUMENTS[@]}" "$SPARKLE"
 fi
 
-codesign "${SIGNING_ARGUMENTS[@]}" "$BUNDLE"
+codesign "${SIGNING_ARGUMENTS[@]}" \
+    --entitlements "$ROOT/Resources/ModelMeter.entitlements" \
+    "$BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$BUNDLE"
 
 echo "$BUNDLE"
