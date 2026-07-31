@@ -5,6 +5,38 @@ import XCTest
 
 final class CompactPopoverLayoutTests: XCTestCase {
     @MainActor
+    func testCodexActivityUsesTwoRowsOfThreeMetrics() {
+        let card = ProviderUsageCard(
+            provider: .codex,
+            state: .idle,
+            displayMode: .used
+        )
+        let metrics = card.activityMetrics(
+            UsageActivity(
+                todayTokens: 87_650,
+                lifetimeTokens: 9_876_543,
+                peakDailyTokens: 456_789,
+                currentStreakDays: 9,
+                longestStreakDays: 42,
+                longestRunningTurnSeconds: 7_425
+            )
+        )
+
+        XCTAssertEqual(
+            metrics.map(\.id),
+            [
+                "todayTokens",
+                "lifetimeTokens",
+                "peakDailyTokens",
+                "streak",
+                "longestStreak",
+                "longestRunningTurn",
+            ]
+        )
+        XCTAssertEqual(metrics.last?.value, "2h 3m")
+    }
+
+    @MainActor
     func testRepresentativeCompactCardsStayWithinHeightBudget() {
         _ = NSApplication.shared
         let now = Date()
@@ -58,7 +90,10 @@ final class CompactPopoverLayoutTests: XCTestCase {
             activity: UsageActivity(
                 todayTokens: 87_650,
                 lifetimeTokens: 9_876_543,
+                peakDailyTokens: 456_789,
                 currentStreakDays: 9,
+                longestStreakDays: 42,
+                longestRunningTurnSeconds: 7_425,
                 dailyTokens: history(endingAt: now, scale: 5_000)
             ),
             cliVersion: "1.2.3",

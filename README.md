@@ -8,7 +8,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Claude token activity, streak, lifetime sessions/messages, and interactive/background session count
 - Codex rolling and weekly quota windows, including model-specific buckets
 - Available Codex usage-limit reset credits and their expiry dates
-- Codex tokens used today, lifetime tokens, plan, and streak
+- Codex daily and lifetime token activity, current and best streaks, peak day, and longest-running turn
 - Exact and relative reset times for quota windows when the CLI reports enough timing data
 - Independent stale/error states, so one provider can fail without hiding the other
 - A persistent Used / Remaining toggle for every graph and the menu-bar percentage

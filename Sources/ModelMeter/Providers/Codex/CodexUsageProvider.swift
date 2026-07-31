@@ -52,12 +52,6 @@ struct CodexUsageProvider: UsageProviding, Sendable {
 
         let fetchedAt = now()
         let limits = makeLimits(from: rateLimits)
-        let today = Self.dayString(for: fetchedAt)
-        let todayTokens = usage?.dailyUsageBuckets?
-            .filter { $0.startDate == today }
-            .reduce(Int64(0)) { partial, bucket in
-                partial + max(bucket.tokens, 0)
-            }
 
         return ProviderUsageSnapshot(
             provider: .codex,
@@ -65,20 +59,37 @@ struct CodexUsageProvider: UsageProviding, Sendable {
             plan: planLabel(from: rateLimits),
             limits: limits,
             resetCredits: makeResetCredits(from: rateLimits.rateLimitResetCredits),
-            activity: UsageActivity(
-                todayTokens: todayTokens,
-                lifetimeTokens: usage?.summary.lifetimeTokens,
-                sessionCostUSD: nil,
-                activeSessions: nil,
-                currentStreakDays: usage?.summary.currentStreakDays,
-                dailyTokens: Self.tokenHistory(
-                    buckets: usage?.dailyUsageBuckets ?? [],
-                    endingAt: fetchedAt
-                )
-            ),
+            activity: Self.makeActivity(from: usage, at: fetchedAt),
             cliVersion: initialize?.userAgent.flatMap(Self.version(from:)),
             source: "Codex app-server",
             note: snapshotNote(hasLimits: !limits.isEmpty, hasUsage: usage != nil)
+        )
+    }
+
+    static func makeActivity(
+        from usage: CodexAccountUsageResult?,
+        at fetchedAt: Date
+    ) -> UsageActivity {
+        let today = dayString(for: fetchedAt)
+        let todayTokens = usage?.dailyUsageBuckets?
+            .filter { $0.startDate == today }
+            .reduce(Int64(0)) { partial, bucket in
+                partial + max(bucket.tokens, 0)
+            }
+
+        return UsageActivity(
+            todayTokens: todayTokens,
+            lifetimeTokens: usage?.summary.lifetimeTokens,
+            peakDailyTokens: usage?.summary.peakDailyTokens,
+            sessionCostUSD: nil,
+            activeSessions: nil,
+            currentStreakDays: usage?.summary.currentStreakDays,
+            longestStreakDays: usage?.summary.longestStreakDays,
+            longestRunningTurnSeconds: usage?.summary.longestRunningTurnSec,
+            dailyTokens: tokenHistory(
+                buckets: usage?.dailyUsageBuckets ?? [],
+                endingAt: fetchedAt
+            )
         )
     }
 

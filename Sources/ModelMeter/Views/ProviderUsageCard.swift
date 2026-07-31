@@ -771,7 +771,7 @@ struct ProviderUsageCard: View {
         return "CLI \(version)"
     }
 
-    private func activityMetrics(_ activity: UsageActivity) -> [ActivityMetric] {
+    func activityMetrics(_ activity: UsageActivity) -> [ActivityMetric] {
         var metrics: [ActivityMetric] = []
 
         if let tokens = activity.todayTokens {
@@ -788,6 +788,15 @@ struct ProviderUsageCard: View {
                 id: "lifetimeTokens",
                 systemImage: "sum",
                 title: "Lifetime",
+                value: formattedCount(tokens)
+            ))
+        }
+
+        if let tokens = activity.peakDailyTokens {
+            metrics.append(ActivityMetric(
+                id: "peakDailyTokens",
+                systemImage: "chart.line.uptrend.xyaxis",
+                title: "Peak day",
                 value: formattedCount(tokens)
             ))
         }
@@ -819,6 +828,24 @@ struct ProviderUsageCard: View {
             ))
         }
 
+        if let days = activity.longestStreakDays {
+            metrics.append(ActivityMetric(
+                id: "longestStreak",
+                systemImage: "trophy",
+                title: "Best streak",
+                value: days.formatted()
+            ))
+        }
+
+        if let seconds = activity.longestRunningTurnSeconds {
+            metrics.append(ActivityMetric(
+                id: "longestRunningTurn",
+                systemImage: "clock",
+                title: "Longest turn",
+                value: formattedDuration(seconds)
+            ))
+        }
+
         if let sessions = activity.totalSessions {
             metrics.append(ActivityMetric(
                 id: "totalSessions",
@@ -842,6 +869,32 @@ struct ProviderUsageCard: View {
 
     private func formattedCount(_ value: Int64) -> String {
         value.formatted(.number.notation(.compactName))
+    }
+
+    private func formattedDuration(_ seconds: Int64) -> String {
+        let seconds = max(seconds, 0)
+        if seconds < 60 {
+            return "\(seconds)s"
+        }
+
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+
+        let hours = minutes / 60
+        if hours < 24 {
+            let remainingMinutes = minutes % 60
+            return remainingMinutes == 0
+                ? "\(hours)h"
+                : "\(hours)h \(remainingMinutes)m"
+        }
+
+        let days = hours / 24
+        let remainingHours = hours % 24
+        return remainingHours == 0
+            ? "\(days)d"
+            : "\(days)d \(remainingHours)h"
     }
 }
 
@@ -942,7 +995,7 @@ private struct PlaceholderView: View {
     }
 }
 
-private struct ActivityMetric: Identifiable {
+struct ActivityMetric: Identifiable {
     let id: String
     let systemImage: String
     let title: String
@@ -1216,8 +1269,8 @@ private struct CompactActivityMetricView: View {
                 .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 4)
-        .padding(.vertical, 3)
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+        .padding(.vertical, 1.5)
+        .frame(maxWidth: .infinity, minHeight: 27, alignment: .leading)
         .background(
             .primary.opacity(0.034),
             in: RoundedRectangle(cornerRadius: 6, style: .continuous)

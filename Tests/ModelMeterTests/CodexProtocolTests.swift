@@ -109,6 +109,29 @@ final class CodexProtocolTests: XCTestCase {
         XCTAssertEqual(buckets[2].tokens, 34_567)
     }
 
+    func testMapsCompleteAccountUsageSummaryToActivity() throws {
+        let result = try CodexProtocol.decode(
+            CodexAccountUsageResult.self,
+            from: fixtureData(named: "codex-account-usage"),
+            expectedID: CodexProtocol.usageID
+        )
+        let date = try XCTUnwrap(
+            Calendar(identifier: .gregorian).date(
+                from: DateComponents(year: 2030, month: 3, day: 3, hour: 12)
+            )
+        )
+
+        let activity = CodexUsageProvider.makeActivity(from: result, at: date)
+
+        XCTAssertEqual(activity.todayTokens, 34_567)
+        XCTAssertEqual(activity.lifetimeTokens, 1_234_567)
+        XCTAssertEqual(activity.peakDailyTokens, 98_765)
+        XCTAssertEqual(activity.currentStreakDays, 6)
+        XCTAssertEqual(activity.longestStreakDays, 21)
+        XCTAssertEqual(activity.longestRunningTurnSeconds, 2_345)
+        XCTAssertEqual(activity.dailyTokens.count, 90)
+    }
+
     func testMapsRPCAuthenticationErrorToNotAuthenticated() throws {
         XCTAssertThrowsError(
             try CodexProtocol.decode(

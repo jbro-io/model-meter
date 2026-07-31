@@ -53,9 +53,12 @@ struct UsageLimit: Identifiable, Equatable, Sendable {
 struct UsageActivity: Equatable, Sendable {
     var todayTokens: Int64?
     var lifetimeTokens: Int64?
+    var peakDailyTokens: Int64?
     var sessionCostUSD: Double?
     var activeSessions: Int?
     var currentStreakDays: Int?
+    var longestStreakDays: Int?
+    var longestRunningTurnSeconds: Int64?
     var totalSessions: Int?
     var totalMessages: Int?
     var dailyTokens: [UsageActivityDay] = []
