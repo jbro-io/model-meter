@@ -35,6 +35,7 @@ struct UsagePopover: View {
     @ObservedObject var store: UsageStore
     @ObservedObject var settings: AppSettings
     @ObservedObject var autoContinueController: AutoContinueController
+    @ObservedObject var updateController: UpdateController
     let openSettings: @MainActor () -> Void
     let openProviderWindow: @MainActor (ProviderID) -> Void
     let openCombinedWindow: @MainActor () -> Void
@@ -46,6 +47,7 @@ struct UsagePopover: View {
         store: UsageStore,
         settings: AppSettings,
         autoContinueController: AutoContinueController,
+        updateController: UpdateController,
         openSettings: @escaping @MainActor () -> Void,
         openProviderWindow: @escaping @MainActor (ProviderID) -> Void,
         openCombinedWindow: @escaping @MainActor () -> Void,
@@ -55,6 +57,7 @@ struct UsagePopover: View {
         self.store = store
         self.settings = settings
         self.autoContinueController = autoContinueController
+        self.updateController = updateController
         self.openSettings = openSettings
         self.openProviderWindow = openProviderWindow
         self.openCombinedWindow = openCombinedWindow
@@ -275,10 +278,38 @@ struct UsagePopover: View {
 
             Spacer()
 
-            Text("LOCAL TELEMETRY")
-                .font(.system(size: 7, weight: .medium, design: .monospaced))
-                .tracking(0.7)
-                .foregroundStyle(.tertiary)
+            if let availableVersion = updateController.availableVersion {
+                Button(action: updateController.checkForUpdates) {
+                    Label("UPDATE AVAILABLE", systemImage: "arrow.down.circle.fill")
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .tracking(0.35)
+                        .foregroundStyle(.black.opacity(0.82))
+                        .padding(.horizontal, 7)
+                        .frame(height: 18)
+                        .background(
+                            LinearGradient(
+                                colors: [.yellow, .orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: Capsule()
+                        )
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(.white.opacity(0.5), lineWidth: 0.5)
+                        }
+                        .shadow(color: .orange.opacity(0.42), radius: 4)
+                }
+                .buttonStyle(.plain)
+                .help("Install Model Meter \(availableVersion)")
+                .accessibilityLabel("Update available")
+                .accessibilityValue(availableVersion)
+            } else {
+                Text("LOCAL TELEMETRY")
+                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .tracking(0.7)
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer()
 

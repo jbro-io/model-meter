@@ -32,6 +32,12 @@
     <string>Model Meter identifies enrolled terminal sessions and sends “continue” only after an observed quota recovery or an explicit Send Now action.</string>
     <key>SUFeedURL</key>
     <string>https://github.com/jbro-io/model-meter/releases/latest/download/appcast.xml</string>
+    <key>SUAllowsAutomaticUpdates</key>
+    <false/>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>3600</integer>
     <key>SUPublicEDKey</key>
     <string>p9cGWNrI1VSKH821+Zis1HxQJjJ7x6q9IbQL/P8t9OU=</string>
     <key>SURequireSignedFeed</key>

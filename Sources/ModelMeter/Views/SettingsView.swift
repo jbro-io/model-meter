@@ -90,7 +90,7 @@ struct SettingsView: View {
                     .modelMeterGlassButton()
                     .controlSize(.small)
 
-                    Text("Model Meter can check GitHub Releases and securely install signed updates without downloading or rebuilding the project.")
+                    Text("Model Meter checks GitHub Releases in the background and securely installs signed updates without downloading or rebuilding the project.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

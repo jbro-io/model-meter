@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import Sparkle
 import SwiftUI
 
 @MainActor
@@ -11,18 +10,10 @@ private final class AppServices {
     let store: UsageStore
     let alertController: UsageAlertController
     let autoContinueController: AutoContinueController
-    let updaterController: SPUStandardUpdaterController?
+    let updateController: UpdateController
 
     private init() {
-        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
-            updaterController = SPUStandardUpdaterController(
-                startingUpdater: true,
-                updaterDelegate: nil,
-                userDriverDelegate: nil
-            )
-        } else {
-            updaterController = nil
-        }
+        updateController = UpdateController()
 
         let settings = AppSettings()
         self.settings = settings
@@ -47,7 +38,7 @@ struct ModelMeterApp: App {
                 alertController: services.alertController,
                 autoContinueController: services.autoContinueController,
                 checkForUpdates: { [services] in
-                    services.updaterController?.checkForUpdates(nil)
+                    services.updateController.checkForUpdates()
                 }
             )
         }
@@ -149,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 alertController: services.alertController,
                 autoContinueController: services.autoContinueController,
                 checkForUpdates: { [services] in
-                    services.updaterController?.checkForUpdates(nil)
+                    services.updateController.checkForUpdates()
                 }
             )
         }
@@ -207,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 store: services.store,
                 settings: services.settings,
                 autoContinueController: services.autoContinueController,
+                updateController: services.updateController,
                 openSettings: { [weak self] in
                     self?.showSettings()
                 },
