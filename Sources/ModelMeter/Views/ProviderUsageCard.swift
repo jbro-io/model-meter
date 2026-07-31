@@ -1027,10 +1027,6 @@ private struct CompactActivitySignalView: View {
     var body: some View {
         VStack(spacing: 3) {
             HStack(spacing: 5) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 7.5, weight: .bold))
-                    .foregroundStyle(tint)
-
                 Text("TOKEN SIGNAL")
                     .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
                     .tracking(0.5)
