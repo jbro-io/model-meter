@@ -96,7 +96,7 @@ If Kitty already has a `listen_on` address, keep it—Model Meter discovers the 
 
 Use the terminal button in Model Meter's popover to slide into the Session Autopilot workspace, or open the full Auto-Continue settings. Kitty tab titles are cleaned up and shown as session tiles. The default **Selected Sessions** mode sends only to the sessions you explicitly enroll. **All Sessions** opts that provider into every live Kitty window matching its foreground process or title. Advanced matching accepts Kitty's native match syntax or Model Meter's `smart:<provider>` matcher.
 
-Model Meter verifies saved window IDs against live provider-matching Kitty windows before sending. It sends once per observed exhaustion/recovery cycle, persists an armed recovery across relaunches, wakes near the provider's reported reset time, and leaves a continuation armed if no enrolled session is available.
+Model Meter verifies saved window IDs against live provider-matching Kitty windows before sending. Each successful scan automatically forgets enrolled window IDs that Kitty no longer reports, so closed tabs do not remain in the enrolled count. It sends once per observed exhaustion/recovery cycle, persists an armed recovery across relaunches, wakes near the provider's reported reset time, and leaves a continuation armed if no enrolled session is available.
 
 ## Privacy and sandboxing
 

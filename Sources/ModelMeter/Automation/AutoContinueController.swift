@@ -153,6 +153,10 @@ final class AutoContinueController: ObservableObject {
                     listenAddress: configuration.address,
                     match: configuration.match
                 )
+                settings.retainKittySessions(
+                    withIDs: Set(summary.targets.map(\.id)),
+                    for: provider
+                )
                 discoveredSessions[provider] = summary.targets
                 scannedProviders.insert(provider)
                 statuses[provider] = .ready(summary)

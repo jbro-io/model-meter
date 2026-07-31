@@ -183,8 +183,6 @@ struct AutoContinueSettingsSection: View {
     @ViewBuilder
     private func sessionPicker(for provider: ProviderID) -> some View {
         let sessions = controller.discoveredSessions[provider] ?? []
-        let liveIDs = Set(sessions.map(\.id))
-        let offlineIDs = settings.kittySessionIDs(for: provider).subtracting(liveIDs)
         if sessions.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: "scope")
@@ -228,30 +226,6 @@ struct AutoContinueSettingsSection: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.background.opacity(0.35))
             )
-        }
-
-        if controller.scannedProviders.contains(provider), !offlineIDs.isEmpty {
-            HStack(spacing: 8) {
-                Image(systemName: "moon.zzz")
-                    .foregroundStyle(.secondary)
-                Text(
-                    offlineIDs.count == 1
-                        ? "1 enrolled session is currently offline"
-                        : "\(offlineIDs.count) enrolled sessions are currently offline"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button("Forget offline") {
-                    for id in offlineIDs {
-                        settings.setKittySession(id, enabled: false, for: provider)
-                    }
-                }
-                .buttonStyle(.link)
-                .controlSize(.small)
-            }
         }
     }
 

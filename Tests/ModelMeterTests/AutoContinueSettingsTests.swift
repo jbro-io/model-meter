@@ -29,4 +29,25 @@ final class AutoContinueSettingsTests: XCTestCase {
         XCTAssertFalse(restored.kittyAllSessions(for: .claude))
         XCTAssertTrue(restored.kittyAllSessions(for: .codex))
     }
+
+    @MainActor
+    func testSuccessfulScanCanForgetClosedSessionsWithoutTouchingOtherProvider() throws {
+        let suiteName = "AutoContinueSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.setKittySession(17, enabled: true, for: .claude)
+        settings.setKittySession(18, enabled: true, for: .claude)
+        settings.setKittySession(22, enabled: true, for: .codex)
+
+        settings.retainKittySessions(withIDs: [18, 99], for: .claude)
+
+        XCTAssertEqual(settings.kittySessionIDs(for: .claude), [18])
+        XCTAssertEqual(settings.kittySessionIDs(for: .codex), [22])
+
+        let restored = AppSettings(defaults: defaults)
+        XCTAssertEqual(restored.kittySessionIDs(for: .claude), [18])
+        XCTAssertEqual(restored.kittySessionIDs(for: .codex), [22])
+    }
 }

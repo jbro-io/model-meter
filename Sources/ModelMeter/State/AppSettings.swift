@@ -380,6 +380,18 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func retainKittySessions(
+        withIDs liveIDs: Set<Int>,
+        for provider: ProviderID
+    ) {
+        switch provider {
+        case .claude:
+            kittyClaudeSessionIDs.formIntersection(liveIDs)
+        case .codex:
+            kittyCodexSessionIDs.formIntersection(liveIDs)
+        }
+    }
+
     func addUsageAlertThreshold(_ percent: Int) {
         usageAlertThresholdPercents = Self.normalizedAlertThresholds(
             usageAlertThresholdPercents + [percent]
