@@ -18,7 +18,16 @@ final class KittyRemoteControlClientTests: XCTestCase {
                         "id": 101,
                         "title": "claude",
                         "cwd": "/Users/test/model-meter",
-                        "cmdline": ["claude"]
+                        "cmdline": ["/bin/zsh"],
+                        "foreground_processes": [
+                          {
+                            "cmdline":[
+                              "node",
+                              "/tmp/node_modules/.bin/codex-mcp-server"
+                            ]
+                          },
+                          {"cmdline":["claude"]}
+                        ]
                       }
                     ]
                   },
@@ -50,6 +59,11 @@ final class KittyRemoteControlClientTests: XCTestCase {
         XCTAssertEqual(summary.targets[0].tabTitle, "  ✳  Model Meter — Claude Code  ")
         XCTAssertEqual(summary.targets[0].displayTitle, "Model Meter")
         XCTAssertEqual(summary.targets[0].currentDirectory, "/Users/test/model-meter")
+        XCTAssertTrue(summary.targets[0].matchesSmartQuery("claude"))
+        XCTAssertFalse(
+            summary.targets[0].matchesSmartQuery("codex"),
+            "A Codex MCP child process must not classify a Claude session as Codex."
+        )
         XCTAssertEqual(summary.targets[1].displayTitle, "API cleanup")
         XCTAssertTrue(summary.targets[1].matchesSmartQuery("codex"))
         XCTAssertFalse(summary.targets[1].matchesSmartQuery("claude"))

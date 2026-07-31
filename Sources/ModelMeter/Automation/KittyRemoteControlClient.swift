@@ -28,6 +28,18 @@ struct KittySessionTarget: Identifiable, Equatable, Sendable {
     func matchesSmartQuery(_ query: String) -> Bool {
         let needle = query.lowercased()
         guard !needle.isEmpty else { return false }
+
+        if Self.knownAgentNames.contains(needle) {
+            let runningAgents = directlyRunningAgentNames
+            if !runningAgents.isEmpty {
+                return runningAgents.contains(needle)
+            }
+
+            return [tabTitle, windowTitle].contains {
+                $0.localizedCaseInsensitiveContains(needle)
+            }
+        }
+
         let searchableValues = [
             tabTitle,
             windowTitle,
@@ -36,6 +48,18 @@ struct KittySessionTarget: Identifiable, Equatable, Sendable {
         return searchableValues.contains {
             $0.localizedCaseInsensitiveContains(needle)
         }
+    }
+
+    private static let knownAgentNames: Set<String> = ["claude", "codex"]
+
+    private var directlyRunningAgentNames: Set<String> {
+        Set(
+            ([commandLine] + foregroundCommandLines).compactMap { commandLine in
+                guard let executable = commandLine.first else { return nil }
+                let name = (executable as NSString).lastPathComponent.lowercased()
+                return Self.knownAgentNames.contains(name) ? name : nil
+            }
+        )
     }
 }
 
