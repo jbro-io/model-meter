@@ -1132,20 +1132,7 @@ private struct CompactActivitySignalView: View {
             }
             .frame(height: 42)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .background(
-            LinearGradient(
-                colors: [tint.opacity(0.065), .primary.opacity(0.012)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(tint.opacity(0.12), lineWidth: 0.5)
-        }
+        .frame(maxWidth: .infinity)
         .animation(
             reduceMotion ? nil : .snappy(duration: 0.3),
             value: range
