@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Model Meter"
+  short_description: "Run Model Meter validation and install checks"
+  default_prompt: "Use $verify-model-meter to validate the current changes and reinstall Model Meter."

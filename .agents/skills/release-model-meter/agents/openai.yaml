@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Model Meter"
+  short_description: "Build, sign, and publish Model Meter releases"
+  default_prompt: "Use $release-model-meter to prepare and publish a Model Meter release."
