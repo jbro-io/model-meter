@@ -60,7 +60,8 @@ final class CompactPopoverLayoutTests: XCTestCase {
                 currentStreakDays: 21,
                 totalSessions: 1_248,
                 totalMessages: 48_392,
-                dailyTokens: history(endingAt: now, scale: 8_000)
+                dailyTokens: history(endingAt: now, scale: 8_000),
+                scope: .claudeLocalProfile
             ),
             cliVersion: "2.1.0",
             source: "Claude CLI /usage",
@@ -94,7 +95,8 @@ final class CompactPopoverLayoutTests: XCTestCase {
                 currentStreakDays: 9,
                 longestStreakDays: 42,
                 longestRunningTurnSeconds: 7_425,
-                dailyTokens: history(endingAt: now, scale: 5_000)
+                dailyTokens: history(endingAt: now, scale: 5_000),
+                scope: .codexAccount
             ),
             cliVersion: "1.2.3",
             source: "Codex app-server",

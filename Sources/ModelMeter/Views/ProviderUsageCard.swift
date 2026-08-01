@@ -48,7 +48,7 @@ struct ProviderUsageCard: View {
     var activityStyle: ProviderCardActivityStyle = .compact
     var openWindow: (@MainActor () -> Void)? = nil
     @State private var showsResetCredits = false
-    @State private var activityRange: ActivityHistoryRange = .month
+    @State private var activityRange: ActivityHistoryRange = .week
 
     private let staleInterval: TimeInterval = 10 * 60
 
@@ -103,13 +103,14 @@ struct ProviderUsageCard: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(.primary.opacity(0.045), in: Capsule())
+                        .help(accountDescription(state.snapshot))
                 }
             } else {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(provider.displayName)
                         .font(.headline)
 
-                    Text(state.snapshot?.plan ?? "CLI usage")
+                    Text(expandedAccountDescription(state.snapshot))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -350,6 +351,10 @@ struct ProviderUsageCard: View {
                 Text("Activity")
                     .font(.callout.weight(.semibold))
 
+                if let scope = activity.scope {
+                    activityScopeBadge(scope, compact: false)
+                }
+
                 Spacer()
 
                 if !activity.dailyTokens.isEmpty {
@@ -423,6 +428,10 @@ struct ProviderUsageCard: View {
                     .textCase(.uppercase)
                     .tracking(0.7)
                     .foregroundStyle(.secondary)
+
+                if let scope = activity.scope {
+                    activityScopeBadge(scope, compact: true)
+                }
 
                 Spacer(minLength: 4)
 
@@ -771,6 +780,40 @@ struct ProviderUsageCard: View {
         return "CLI \(version)"
     }
 
+    private func accountDescription(_ snapshot: ProviderUsageSnapshot?) -> String {
+        guard let snapshot else { return "CLI usage" }
+        let parts = [snapshot.plan, snapshot.account]
+            .compactMap { $0 }
+        return parts.isEmpty ? "CLI usage" : parts.joined(separator: " · ")
+    }
+
+    private func expandedAccountDescription(_ snapshot: ProviderUsageSnapshot?) -> String {
+        accountDescription(snapshot)
+    }
+
+    private func activityScopeBadge(
+        _ scope: UsageActivityScope,
+        compact: Bool
+    ) -> some View {
+        Text(scope.label.uppercased())
+            .font(
+                .system(
+                    size: compact ? 7 : 8,
+                    weight: .bold,
+                    design: .monospaced
+                )
+            )
+            .tracking(0.35)
+            .foregroundStyle(provider.tint)
+            .padding(.horizontal, compact ? 4 : 5)
+            .padding(.vertical, compact ? 1.5 : 2)
+            .background(provider.tint.opacity(0.1), in: Capsule())
+            .overlay(Capsule().stroke(provider.tint.opacity(0.18), lineWidth: 0.5))
+            .help(scope.detail)
+            .accessibilityLabel("Activity scope: \(scope.label)")
+            .accessibilityHint(scope.detail)
+    }
+
     func activityMetrics(_ activity: UsageActivity) -> [ActivityMetric] {
         var metrics: [ActivityMetric] = []
 
@@ -787,7 +830,7 @@ struct ProviderUsageCard: View {
             metrics.append(ActivityMetric(
                 id: "lifetimeTokens",
                 systemImage: "sum",
-                title: "Lifetime",
+                title: provider == .claude ? "Local total" : "Lifetime",
                 value: formattedCount(tokens)
             ))
         }
@@ -850,7 +893,7 @@ struct ProviderUsageCard: View {
             metrics.append(ActivityMetric(
                 id: "totalSessions",
                 systemImage: "tray.full",
-                title: "Total sessions",
+                title: provider == .claude ? "Local sessions" : "Total sessions",
                 value: sessions.formatted(.number.notation(.compactName))
             ))
         }
@@ -859,7 +902,7 @@ struct ProviderUsageCard: View {
             metrics.append(ActivityMetric(
                 id: "totalMessages",
                 systemImage: "bubble.left.and.bubble.right",
-                title: "Messages",
+                title: provider == .claude ? "Local messages" : "Messages",
                 value: messages.formatted(.number.notation(.compactName))
             ))
         }

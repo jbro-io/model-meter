@@ -87,20 +87,30 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
         )
 
         let agentsOutput = try? await agentsCommand
-        let cliSessionCount = agentsOutput.flatMap(activeSessionCount) ?? 0
+        let cliSessionCount = agentsOutput.flatMap(activeSessionCount)
         let fetchedAt = now()
-        let registryCount = ClaudeSessionRegistry().recentSessionCount(now: fetchedAt)
-        let activeSessions = max(cliSessionCount, registryCount)
-        let stats = ClaudeStatsCacheStore().load(now: fetchedAt)
+        let registryCount = cliSessionCount == nil
+            ? ClaudeSessionRegistry().recentSessionCount(now: fetchedAt)
+            : nil
+        let activeSessions = cliSessionCount ?? registryCount
+        let stats = await Task.detached(priority: .utility) {
+            ClaudeActivityStore().load(now: fetchedAt)
+        }.value
 
         let versionOutput = try? await versionCommand
         let version = versionOutput?.stdoutString.trimmingCharacters(in: .whitespacesAndNewlines)
-        let note = note(for: auth, hasLimits: !parsed.limits.isEmpty, registryFallbackUsed: registryCount > cliSessionCount)
+        let note = note(
+            for: auth,
+            hasLimits: !parsed.limits.isEmpty,
+            registryFallbackUsed: cliSessionCount == nil,
+            stats: stats
+        )
 
         return ProviderUsageSnapshot(
             provider: .claude,
             fetchedAt: fetchedAt,
             plan: auth.planLabel,
+            account: auth.accountLabel,
             limits: parsed.limits,
             activity: UsageActivity(
                 todayTokens: stats?.todayTokens,
@@ -110,10 +120,13 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
                 currentStreakDays: stats?.currentStreakDays,
                 totalSessions: stats?.totalSessions,
                 totalMessages: stats?.totalMessages,
-                dailyTokens: stats?.dailyTokens ?? []
+                dailyTokens: stats?.dailyTokens ?? [],
+                scope: .claudeLocalProfile
             ),
             cliVersion: version,
-            source: "Claude CLI /usage",
+            source: stats?.usesTranscriptMetadata == true
+                ? "Claude CLI /usage + local usage metadata"
+                : "Claude CLI /usage",
             note: note
         )
     }
@@ -160,7 +173,12 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
         return sessions.filter { !$0.isFinished }.count
     }
 
-    private func note(for auth: ClaudeAuthStatus, hasLimits: Bool, registryFallbackUsed: Bool) -> String? {
+    private func note(
+        for auth: ClaudeAuthStatus,
+        hasLimits: Bool,
+        registryFallbackUsed: Bool,
+        stats: ClaudeStatsSnapshot?
+    ) -> String? {
         var parts: [String] = []
         if !hasLimits {
             if auth.authMethod == "api_key" || auth.authMethod == "api_key_helper" || auth.authMethod == "third_party" {
@@ -170,7 +188,10 @@ struct ClaudeUsageProvider: UsageProviding, Sendable {
             }
         }
         if registryFallbackUsed {
-            parts.append("Active sessions include recently updated Claude registry entries.")
+            parts.append("Active sessions are estimated from recently updated Claude registry entries.")
+        }
+        if let stats, !stats.isCurrent, let day = stats.dataThroughDay {
+            parts.append("Local activity is only complete through \(day).")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
@@ -189,6 +210,9 @@ private struct ClaudeAuthStatus: Decodable {
     let loggedIn: Bool
     let authMethod: String?
     let apiProvider: String?
+    let email: String?
+    let orgName: String?
+    let subscriptionType: String?
 
     var expectsSubscriptionLimits: Bool {
         authMethod == "claude.ai" || authMethod == "oauth_token"
@@ -196,11 +220,33 @@ private struct ClaudeAuthStatus: Decodable {
 
     var planLabel: String? {
         switch authMethod {
-        case "claude.ai", "oauth_token": "Subscription"
+        case "claude.ai", "oauth_token": normalizedSubscriptionType ?? "Subscription"
         case "api_key", "api_key_helper": "API"
         case "third_party": apiProvider?.capitalized
         default: nil
         }
+    }
+
+    var accountLabel: String? {
+        sanitized(email) ?? sanitized(orgName)
+    }
+
+    private var normalizedSubscriptionType: String? {
+        guard let value = sanitized(subscriptionType) else { return nil }
+        switch value.lowercased() {
+        case "max": return "Max"
+        case "pro": return "Pro"
+        case "team": return "Team"
+        case "enterprise": return "Enterprise"
+        default: return value.capitalized
+        }
+    }
+
+    private func sanitized(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty
+        else { return nil }
+        return String(value.prefix(100))
     }
 }
 
@@ -209,7 +255,7 @@ private struct ClaudeAgentSession: Decodable {
     let status: String?
 
     var isFinished: Bool {
-        guard let state else { return false }
+        guard let state = state ?? status else { return false }
         return ["done", "failed", "stopped"].contains(state.lowercased())
     }
 }
@@ -221,13 +267,10 @@ private struct ClaudeSessionRegistry {
     }
 
     func recentSessionCount(now: Date) -> Int {
-        let environment = ProcessInfo.processInfo.environment
-        let base: URL
-        if let configured = environment["CLAUDE_CONFIG_DIR"], !configured.isEmpty {
-            base = URL(fileURLWithPath: (configured as NSString).expandingTildeInPath)
-        } else {
-            base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
-        }
+        let base = ClaudeConfigurationDirectory.resolve(
+            environment: ProcessInfo.processInfo.environment,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+        )
 
         let directory = base.appendingPathComponent("sessions")
         guard let files = try? FileManager.default.contentsOfDirectory(

@@ -70,6 +70,10 @@ struct SettingsView: View {
                     .modelMeterGlassButton()
                     .controlSize(.small)
                     .disabled(store.isRefreshing)
+
+                    Text("New installs check every minute. Opening a dashboard rechecks data once the previous result is 15 seconds old.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Updates") {
@@ -252,7 +256,7 @@ struct SettingsView: View {
                 }
 
                 Section("Privacy") {
-                    Text("Model Meter launches your installed CLIs. It never reads, stores, or logs their access tokens. App Sandbox is disabled so the CLIs can use their existing login and inspect concurrent local sessions.")
+                    Text("Model Meter launches your installed CLIs and never reads, stores, or logs access tokens. To keep Claude activity current, it decodes only timestamp, model, and numeric usage metadata from local Claude entries; prompt and response fields are ignored. App Sandbox is disabled so the CLIs can use their existing login and inspect concurrent local sessions.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -13,7 +13,7 @@ final class LiveProviderTests: XCTestCase {
 
         let snapshot = try await ClaudeUsageProvider().fetch()
         XCTAssertEqual(snapshot.provider, .claude)
-        XCTAssertEqual(snapshot.source, "Claude CLI /usage")
+        XCTAssertTrue(snapshot.source.hasPrefix("Claude CLI /usage"))
         XCTAssertNotNil(snapshot.cliVersion)
         if ProcessInfo.processInfo.environment["MODEL_METER_EXPECT_CLAUDE_LIMITS"] == "1" {
             XCTAssertFalse(snapshot.limits.isEmpty, "Expected subscription quota windows from Claude /usage")

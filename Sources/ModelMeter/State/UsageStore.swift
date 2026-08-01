@@ -62,7 +62,7 @@ final class UsageStore: ObservableObject {
     }
 
     func refreshIfStale() {
-        let staleAfter = TimeInterval(min(settings.refreshMinutes * 60, 60))
+        let staleAfter: TimeInterval = 15
         if lastCompletedRefresh.map({ Date().timeIntervalSince($0) >= staleAfter }) ?? true {
             refresh()
         }

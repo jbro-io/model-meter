@@ -62,8 +62,24 @@ struct UsageActivity: Equatable, Sendable {
     var totalSessions: Int?
     var totalMessages: Int?
     var dailyTokens: [UsageActivityDay] = []
+    var scope: UsageActivityScope?
 
     static let empty = UsageActivity()
+}
+
+struct UsageActivityScope: Equatable, Sendable {
+    let label: String
+    let detail: String
+
+    static let claudeLocalProfile = UsageActivityScope(
+        label: "Local",
+        detail: "Usage from this Claude profile on this Mac; combines every Claude account used through it."
+    )
+
+    static let codexAccount = UsageActivityScope(
+        label: "Account",
+        detail: "Account-wide usage returned by the Codex app server."
+    )
 }
 
 struct UsageActivityDay: Identifiable, Equatable, Sendable {
@@ -88,6 +104,7 @@ struct ProviderUsageSnapshot: Equatable, Sendable {
     let provider: ProviderID
     let fetchedAt: Date
     let plan: String?
+    let account: String?
     let limits: [UsageLimit]
     let resetCredits: UsageResetCredits?
     let activity: UsageActivity
@@ -99,6 +116,7 @@ struct ProviderUsageSnapshot: Equatable, Sendable {
         provider: ProviderID,
         fetchedAt: Date,
         plan: String?,
+        account: String? = nil,
         limits: [UsageLimit],
         resetCredits: UsageResetCredits? = nil,
         activity: UsageActivity,
@@ -109,6 +127,7 @@ struct ProviderUsageSnapshot: Equatable, Sendable {
         self.provider = provider
         self.fetchedAt = fetchedAt
         self.plan = plan
+        self.account = account
         self.limits = limits
         self.resetCredits = resetCredits
         self.activity = activity

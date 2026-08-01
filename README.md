@@ -5,7 +5,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 ## What it shows
 
 - Claude subscription quota windows from the built-in `/usage` command
-- Claude token activity, streak, lifetime sessions/messages, and interactive/background session count
+- Local Claude token activity, streak, lifetime sessions/messages, and interactive/background session count
 - Codex rolling and weekly quota windows, including model-specific buckets
 - Available Codex usage-limit reset credits and their expiry dates
 - Codex daily and lifetime token activity, current and best streaks, peak day, and longest-running turn
@@ -18,7 +18,7 @@ Model Meter is a small native macOS menu-bar utility for seeing Claude Code and 
 - Configurable native macOS alerts at one or more remaining-quota thresholds, with optional sound
 - Session-aware Auto-Continue for Kitty, iTerm2, and Ghostty: resume enrolled Claude or Codex sessions when an exhausted 5-hour window recovers
 - Signed in-app updates from GitHub Releases, including a manual Check for Updates action
-- Automatic refresh (1–30 minutes), manual refresh, and configurable CLI paths
+- Automatic refresh every minute by default (configurable to 1–30 minutes), refresh-on-open, manual refresh, and configurable CLI paths
 
 The menu-bar item identifies the provider and quota window currently under the most pressure, using the selected Used or Remaining mode.
 
@@ -102,7 +102,11 @@ claude --print --output-format json --no-session-persistence --safe-mode /usage
 
 It also runs `claude auth status --json` and `claude agents --json`. Safe mode avoids loading project hooks and plugins while retaining the CLI's own authentication. Model Meter does not extract OAuth tokens or call Anthropic's private usage endpoint itself.
 
-For the Activity panel, Model Meter reads Claude Code's aggregate `~/.claude/stats-cache.json`. Detached provider windows render a token pulse graph with 7-day, 30-day, and 3-month ranges; constrained popover cards keep the smaller stat grid.
+For the Activity panel, Model Meter uses Claude Code's aggregate `~/.claude/stats-cache.json` as a completed-history checkpoint, then reads newer local JSONL entries so a stale cache cannot turn recent activity into false zeroes. Its data model requests only timestamps, entry types, model names, and numeric usage fields; prompt and response fields are ignored and never retained or logged. Daily points match Claude's own calculation (`input_tokens + output_tokens`), while the local total also includes cache-creation and cache-read tokens. Subagent token use is included without counting each subagent as another session.
+
+Claude does not attach account identity to local usage entries and does not expose account-wide activity across devices. Quota bars therefore follow the account currently signed in, while Activity is explicitly local to that Claude config profile on that Mac and combines any accounts used through it. Different computers can show different Claude Activity totals even when their quota bars match.
+
+Activity graphs open on the most recent 7 days and also offer 30-day and 3-month ranges. Each daily point/bar is the exact provider total for that UTC day, positioned at equal calendar intervals and scaled linearly against the largest visible bucket; hovering a bar shows its exact value.
 
 Claude API-key, Bedrock, Vertex, and Foundry authentication do not expose subscription quota bars through `/usage`. In that case Model Meter still reports concurrent sessions and clearly points API spend reporting to Claude Console.
 
@@ -156,9 +160,9 @@ For iTerm2 and Ghostty, a failed or unauthorized scan never deletes enrollment s
 
 ## Privacy and sandboxing
 
-Model Meter never reads or logs provider credentials. It passes requests to the installed CLIs and parses only their usage responses. App Sandbox is intentionally not enabled because sandboxing would prevent the child CLIs from using their existing config/keychain access and would block Claude's cross-process session discovery.
+Model Meter never reads or logs provider credentials. It passes quota requests to the installed CLIs. App Sandbox is intentionally not enabled because sandboxing would prevent the child CLIs from using their existing config/keychain access and would block Claude's cross-process session discovery.
 
-Claude's fallback session-registry check reads only status timestamps. Its stats integration reads only Claude Code's aggregate stats cache. Model Meter never opens Claude or Codex transcript content.
+Claude's fallback session-registry check reads only status timestamps. Its stats integration reads the aggregate stats cache plus timestamp/model/numeric-usage metadata from newer local JSONL entries. Prompt and response fields are ignored by the decoder, and Model Meter never retains or logs transcript content. Codex activity comes from the account-wide app-server response and does not require transcript access.
 
 Auto-Continue uses Kitty's configured local Unix socket or in-process macOS Apple Events for iTerm2 and Ghostty. It does not use Accessibility permissions, scrape terminal contents, or activate a terminal window. Apple Events access is requested only from an explicit terminal scan or delivery, and the app checks that the terminal is already running so a scan cannot launch it.
 

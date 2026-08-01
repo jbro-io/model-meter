@@ -356,7 +356,7 @@ final class AppSettings: ObservableObject {
         claudePath = defaults.string(forKey: Key.claudePath) ?? ""
         codexPath = defaults.string(forKey: Key.codexPath) ?? ""
         let storedInterval = defaults.integer(forKey: Key.refreshMinutes)
-        refreshMinutes = Self.allowedRefreshMinutes.contains(storedInterval) ? storedInterval : 5
+        refreshMinutes = Self.allowedRefreshMinutes.contains(storedInterval) ? storedInterval : 1
         usageDisplayMode = defaults.string(forKey: Key.usageDisplayMode)
             .flatMap(UsageDisplayMode.init(rawValue:)) ?? .used
         providerDisplayOrder = defaults.string(forKey: Key.providerDisplayOrder)

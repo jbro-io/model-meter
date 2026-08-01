@@ -130,6 +130,35 @@ final class CodexProtocolTests: XCTestCase {
         XCTAssertEqual(activity.longestStreakDays, 21)
         XCTAssertEqual(activity.longestRunningTurnSeconds, 2_345)
         XCTAssertEqual(activity.dailyTokens.count, 90)
+        XCTAssertEqual(activity.scope, .codexAccount)
+    }
+
+    func testMissingAccountUsageDoesNotCreateFalseZeroHistory() {
+        let activity = CodexUsageProvider.makeActivity(from: nil, at: Date())
+
+        XCTAssertNil(activity.todayTokens)
+        XCTAssertNil(activity.lifetimeTokens)
+        XCTAssertTrue(activity.dailyTokens.isEmpty)
+        XCTAssertEqual(activity.scope, .codexAccount)
+    }
+
+    func testMissingDailyBucketsDoNotCreateFalseZeroHistory() {
+        let usage = CodexAccountUsageResult(
+            summary: CodexAccountUsageSummary(
+                lifetimeTokens: 123,
+                peakDailyTokens: nil,
+                longestRunningTurnSec: nil,
+                currentStreakDays: nil,
+                longestStreakDays: nil
+            ),
+            dailyUsageBuckets: nil
+        )
+
+        let activity = CodexUsageProvider.makeActivity(from: usage, at: Date())
+
+        XCTAssertEqual(activity.lifetimeTokens, 123)
+        XCTAssertNil(activity.todayTokens)
+        XCTAssertTrue(activity.dailyTokens.isEmpty)
     }
 
     func testMapsRPCAuthenticationErrorToNotAuthenticated() throws {

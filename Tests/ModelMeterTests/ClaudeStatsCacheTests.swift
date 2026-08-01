@@ -54,9 +54,14 @@ final class ClaudeStatsCacheTests: XCTestCase {
 
         XCTAssertEqual(stats.todayTokens, 2_500)
         XCTAssertEqual(stats.lifetimeTokens, 1_100)
+        XCTAssertEqual(stats.peakDailyTokens, 2_500)
         XCTAssertEqual(stats.totalSessions, 42)
         XCTAssertEqual(stats.totalMessages, 900)
         XCTAssertEqual(stats.currentStreakDays, 3)
+        XCTAssertEqual(stats.longestStreakDays, 3)
+        XCTAssertEqual(stats.dataThroughDay, "2026-07-25")
+        XCTAssertTrue(stats.isCurrent)
+        XCTAssertFalse(stats.usesTranscriptMetadata)
         XCTAssertEqual(stats.dailyTokens.count, 90)
         XCTAssertEqual(
             stats.dailyTokens.suffix(7).map(\.tokens),
@@ -75,7 +80,8 @@ final class ClaudeStatsCacheTests: XCTestCase {
               "dailyModelTokens":[],
               "modelUsage":{},
               "totalSessions":2,
-              "totalMessages":2
+              "totalMessages":2,
+              "lastComputedDate":"2026-07-25"
             }
             """.utf8
         )

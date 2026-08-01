@@ -86,10 +86,13 @@ struct CodexUsageProvider: UsageProviding, Sendable {
             currentStreakDays: usage?.summary.currentStreakDays,
             longestStreakDays: usage?.summary.longestStreakDays,
             longestRunningTurnSeconds: usage?.summary.longestRunningTurnSec,
-            dailyTokens: tokenHistory(
-                buckets: usage?.dailyUsageBuckets ?? [],
-                endingAt: fetchedAt
-            )
+            dailyTokens: usage.flatMap(\.dailyUsageBuckets).map {
+                tokenHistory(
+                    buckets: $0,
+                    endingAt: fetchedAt
+                )
+            } ?? [],
+            scope: .codexAccount
         )
     }
 
